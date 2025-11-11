@@ -364,3 +364,205 @@ def validar_formulario(tecnico, peca):
     return True
 
 # ... (o restante do código permanece igual - funções de visualização, atualização status, etc.)
+# ===============================
+# FUNÇÕES DE INTERFACE - VISUALIZAR PEDIDOS
+# ===============================
+
+def mostrar_lista_pedidos():
+    """Exibe a lista de todos os pedidos e estatísticas"""
+    st.header("📋 Lista de Pedidos")
+    
+    df = obter_todos_pedidos()
+    
+    if not df.empty:
+        # Mostrar dataframe
+        st.dataframe(df, use_container_width=True)
+        
+        # Mostrar estatísticas
+        mostrar_estatisticas(df)
+    else:
+        st.info("📭 Nenhum pedido cadastrado no momento.")
+
+def mostrar_estatisticas(df):
+    """Exibe estatísticas dos pedidos"""
+    st.subheader("📊 Estatísticas")
+    
+    # Criar DataFrame temporário sem emojis para contar
+    df_temp = df.copy()
+    if 'Status:' in df_temp.columns:
+        df_temp['Status:'] = df_temp['Status:'].str.replace(r'[🔴🟡🟢⚪] ', '', regex=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_pedidos = len(df)
+        st.metric("Total de Pedidos", total_pedidos)
+    
+    with col2:
+        pendentes = len(df_temp[df_temp['Status:'] == 'Pendente'])
+        st.metric("🔴 Pendentes", pendentes)
+    
+    with col3:
+        solicitados = len(df_temp[df_temp['Status:'] == 'Solicitado'])
+        st.metric("🟡 Solicitados", solicitados)
+    
+    with col4:
+        entregues = len(df_temp[df_temp['Status:'] == 'Entregue'])
+        taxa_entrega = (entregues / total_pedidos * 100) if total_pedidos > 0 else 0
+        st.metric("🟢 Entregues", f"{entregues} ({taxa_entrega:.1f}%)")
+
+# ===============================
+# FUNÇÕES DE INTERFACE - ATUALIZAR STATUS
+# ===============================
+
+def mostrar_pagina_atualizar_status():
+    """Exibe a página para atualizar status dos pedidos"""
+    st.header("🔄 Atualizar Status do Pedido")
+    
+    if not st.session_state.autorizado:
+        mostrar_formulario_autenticacao()
+    else:
+        mostrar_interface_administrativa()
+
+def mostrar_formulario_autenticacao():
+    """Exibe formulário de autenticação para administradores"""
+    with st.form("form_autenticacao"):
+        senha = st.text_input("🔒 Digite a senha de autorização", type="password")
+        submitted = st.form_submit_button("✅ Validar Senha")
+        
+        if submitted:
+            if senha == SENHA_AUTORIZACAO:
+                st.session_state.autorizado = True
+                st.rerun()
+            else:
+                st.error("❌ Senha incorreta. Tente novamente.")
+
+def mostrar_interface_administrativa():
+    """Exibe a interface administrativa para atualizar status"""
+    # Controles administrativos na sidebar
+    mostrar_controles_admin()
+    
+    # Lista de pedidos na sidebar
+    mostrar_lista_pedidos_sidebar()
+    
+    # Formulário de atualização no main
+    mostrar_formulario_atualizacao_status()
+
+def mostrar_controles_admin():
+    """Exibe controles administrativos na sidebar"""
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔧 Controles Administrativos")
+    
+    if st.sidebar.button("🚪 Sair do Modo Admin"):
+        st.session_state.autorizado = False
+        st.rerun()
+
+def mostrar_lista_pedidos_sidebar():
+    """Exibe lista resumida de pedidos na sidebar"""
+    st.sidebar.subheader("📦 Todos os Pedidos")
+    
+    dados_brutos = sheet.get_all_values()
+    
+    if len(dados_brutos) > 1:
+        dados = dados_brutos[1:]
+        
+        with st.sidebar.container():
+            for linha in dados:
+                if linha and len(linha) > 8 and linha[8]:  # Verifica se existe ID
+                    mostrar_card_pedido(linha)
+            
+            st.sidebar.caption(f"📊 Total: {len(dados)} pedidos")
+    else:
+        st.sidebar.info("🎯 Nenhum pedido cadastrado")
+
+def mostrar_card_pedido(linha):
+    """Exibe um card individual para cada pedido"""
+    status = linha[1] if len(linha) > 1 else "Pendente"
+    emoji_status = obter_emoji_status(status)
+    
+    with st.expander(f"{emoji_status} Pedido {linha[8]} - {linha[2]}", expanded=False):
+        st.write(f"Pedido:  {linha[8]}")
+        st.write(f"**Data:** {linha[0]}")
+        st.write(f"**Status:** {formatar_status(status)}")
+        st.write(f"**Técnico:** {linha[2]}")
+        st.write(f"**Peça:** {linha[3]}")
+        st.write(f"**Modelo:** {linha[4]}")
+        st.write(f"**Nº Série:** {linha[5]}")
+        st.write(f"**OS:** {linha[6]}")
+        
+        if len(linha) > 7 and linha[7]:
+            st.write(f"**Observações:**")
+            st.info(linha[7])
+
+def mostrar_formulario_atualizacao_status():
+    """Exibe formulário para atualizar status do pedido"""
+    st.subheader("Atualizar Status")
+    
+    with st.form("form_atualizacao_status"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            pedido_id = st.text_input("🔢 ID do Pedido *")
+        
+        with col2:
+            # Adicionar emojis nas opções do selectbox
+            opcoes_status = [f"{STATUS_EMOJIS[status]} {status}" for status in STATUS_PEDIDO]
+            novo_status_formatado = st.selectbox("🔄 Novo Status", opcoes_status)
+            # Extrair apenas o texto do status (sem emoji) para salvar
+            novo_status = novo_status_formatado.split(' ', 1)[1]
+        
+        submitted = st.form_submit_button("🔄 Atualizar Status")
+        
+        if submitted:
+            if pedido_id.strip():
+                if atualizar_status_pedido(pedido_id, novo_status):
+                    st.success("Status atualizado! Atualizando lista...")
+                    time.sleep(1)
+                    st.rerun()
+            else:
+                st.warning("⚠️ Por favor, informe o ID do pedido")
+
+# ===============================
+# INICIALIZAÇÃO E CONFIGURAÇÃO PRINCIPAL
+# ===============================
+
+def inicializar_session_state():
+    """Inicializa variáveis de session_state"""
+    if 'autorizado' not in st.session_state:
+        st.session_state.autorizado = False
+
+def main():
+    """Função principal da aplicação"""
+    # Configurações iniciais
+    configurar_pagina()
+    inicializar_session_state()
+    
+    # Título principal
+    st.title("📦 Controle de Pedidos de Peças Usadas")
+    
+    # Menu lateral
+    menu = st.sidebar.selectbox(
+        "📂 Menu",
+        ["Adicionar Pedido", "Visualizar Pedidos", "Atualizar Status"]
+    )
+    
+    # Navegação entre páginas
+    if menu == "Adicionar Pedido":
+        mostrar_formulario_adicionar_pedido()
+    
+    elif menu == "Visualizar Pedidos":
+        mostrar_lista_pedidos()
+    
+    elif menu == "Atualizar Status":
+        mostrar_pagina_atualizar_status()
+
+# ===============================
+# EXECUÇÃO DA APLICAÇÃO
+# ===============================
+
+if __name__ == "__main__":
+    # Inicializar conexão com Google Sheets (global)
+    sheet = inicializar_conexao_google_sheets()
+    
+    # Executar aplicação
+    main()
