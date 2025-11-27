@@ -1,0 +1,6 @@
+streamlit
+pillow
+pandas
+google-cloud-storage
+google-cloud-firestore
+google-auth
