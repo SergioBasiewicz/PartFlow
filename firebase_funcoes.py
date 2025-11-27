@@ -122,7 +122,8 @@ if USE_FIREBASE:
 # -------------------------------------------------------------------
 def upload_foto_bytes(nome_arquivo, bytes_data, pasta="fotos"):
     """
-    Faz upload dos bytes e retorna URL pública (Firebase Storage) ou caminho local.
+    Faz upload dos bytes e retorna URL pública (Firebase Storage)
+    ou caminho local absoluto (sem 'file://').
     """
     if USE_FIREBASE and storage_client:
         try:
@@ -130,9 +131,11 @@ def upload_foto_bytes(nome_arquivo, bytes_data, pasta="fotos"):
             blob_name = f"{pasta}/{uuid.uuid4().hex}_{nome_arquivo}"
             blob = bucket.blob(blob_name)
             blob.upload_from_string(bytes_data, content_type="image/jpeg")
+
             try:
+                # tenta deixar público
                 blob.make_public()
-                return blob.public_url
+                return blob.public_url  # https://...
             except Exception:
                 # fallback: URL assinada longa
                 try:
@@ -144,13 +147,15 @@ def upload_foto_bytes(nome_arquivo, bytes_data, pasta="fotos"):
             print("⚠️ Erro ao fazer upload para Firebase Storage:", e)
             # cai pro modo local
 
-    # Fallback local
+    # -------- Fallback LOCAL --------
     _ensure_local_storage()
     nome = f"{uuid.uuid4().hex}_{nome_arquivo}"
     caminho = UPLOADS_DIR / nome
     with open(caminho, "wb") as f:
         f.write(bytes_data)
-    return f"file://{caminho.resolve()}"
+
+    # retorna caminho absoluto tipo "/mount/src/partflow/uploads/xxx.jpg"
+    return str(caminho.resolve())
 
 
 def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
