@@ -586,6 +586,7 @@ def mostrar_formulario_atualizacao_status():
             st.write(f"**💻 Modelo:** {p.get('modelo', '-')}")
             st.write(f"**🔢 Nº Série:** {numero_serie}")
             st.write(f"**📄 OS:** {p.get('ordem_servico', '-')}")
+            st.write(f"**📄 id:** {p.get('pid', '-')}")
             st.write(f"**📌 Status:** {formatar_status(status)}")
 
             obs = p.get("observacoes", "")
@@ -629,3 +630,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
