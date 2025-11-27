@@ -422,12 +422,13 @@ def mostrar_lista_pedidos():
                         )
                     except Exception:
                         pass
-                else:
-                    if pedido["foto_url"] and str(pedido["foto_url"]).startswith("http"):
+                else:            
+                    if pedido["foto_url"]:
                         try:
                             st.image(pedido["foto_url"], use_container_width=True)
                         except Exception:
-                            pass
+                            st.warning("Não foi possível carregar a imagem deste pedido.")
+
 
     # Estatísticas gerais
     try:
@@ -608,11 +609,12 @@ def mostrar_formulario_atualizacao_status():
                 st.write("**📝 Observações:**")
                 st.info(obs)
 
-            if p.get("tem_foto") and str(p.get("foto_url", "")).startswith("http"):
+            if p.get("tem_foto") and p.get("foto_url"):
                 try:
                     st.image(p["foto_url"], use_container_width=True)
                 except Exception:
-                    pass
+                    st.warning("Não foi possível carregar a imagem deste pedido.")
+
 
 # --------------------------------------------------------------------
 # Session state + main
