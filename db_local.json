@@ -1,54 +1,6 @@
 {
   "pedidos": [
-    {
-      "tecnico": "tre",
-      "peca": "tre",
-      "modelo": "tre",
-      "numero_serie": "tre",
-      "ordem_servico": "tre",
-      "observacoes": "tre",
-      "status": "Solicitado",
-      "data_criacao": "25/11/2025 22:28:17",
-      "id": "e53f39a3",
-      "foto_url": "C:\\Users\\Usuario\\Desktop\\Controle_Pecas_Pacote_Atualizado 1.2\\uploads\\10348d84eabc473fbfec72f867558e15_9753_ampliada.jpg",
-      "tem_foto": true
-    },
-    {
-      "tecnico": "dsad",
-      "peca": "dsadsa",
-      "modelo": "dsadsa",
-      "numero_serie": "dsadsa",
-      "ordem_servico": "dsadas",
-      "observacoes": "dsadsa",
-      "status": "Pendente",
-      "data_criacao": "25/11/2025 22:32:01",
-      "id": "74ecd9c3",
-      "foto_url": "C:\\Users\\Usuario\\Desktop\\Controle_Pecas_Pacote_Atualizado 1.2\\uploads\\4ae2d1f75a884befb64e345a0038f514_9753_ampliada.jpg",
-      "tem_foto": true
-    },
-    {
-      "tecnico": "dasdasd",
-      "peca": "dsadsad",
-      "modelo": "dsadsad",
-      "numero_serie": "dsadasdsa",
-      "ordem_servico": "dsadadsa",
-      "observacoes": "dsadasdas",
-      "status": "Pendente",
-      "data_criacao": "25/11/2025 22:34:45",
-      "id": "8f0a299e",
-      "foto_url": "C:\\Users\\Usuario\\Desktop\\Controle_Pecas_Pacote_Atualizado 1.2\\uploads\\418c043014fe49e0a1cf2f4ca308ebbe_9753_ampliada.jpg",
-      "tem_foto": true
-    },
-    {
-      "tecnico": "dsadsa",
-      "peca": "312",
-      "modelo": "43215",
-      "numero_serie": "666",
-      "ordem_servico": "555",
-      "observacoes": "666",
-      "status": "Pendente",
-      "data_criacao": "25/11/2025 22:39:13",
-      "id": "ac52226c"
-    }
+    
   ]
+
 }
