@@ -299,11 +299,7 @@ def mostrar_formulario_adicionar_pedido():
         if uploaded_file is not None:
             foto_info = processar_upload_foto(uploaded_file, "preview")
             if foto_info:
-                st.success(
-                    f"✅ Foto carregada: {foto_info['nome']} "
-                    f"({foto_info['dimensoes'][0]}x{foto_info['dimensoes'][1]})"
-                )
-                mostrar_foto(foto_info)
+                st.success(f"📸 Foto anexada com sucesso!")
 
         submitted = st.form_submit_button("➕ Adicionar Pedido")
 
@@ -422,13 +418,12 @@ def mostrar_lista_pedidos():
                         )
                     except Exception:
                         pass
-                else:            
+                else:
                     if pedido["foto_url"]:
                         try:
                             st.image(pedido["foto_url"], use_container_width=True)
                         except Exception:
                             st.warning("Não foi possível carregar a imagem deste pedido.")
-
 
     # Estatísticas gerais
     try:
@@ -485,20 +480,9 @@ def mostrar_formulario_atualizacao_status():
         df = obter_todos_pedidos()
 
         with st.form("form_atualizacao_status"):
-            modo_busca = st.radio(
-                "Buscar por:",
-                ["ID do Pedido", "Número de Série"],
-                horizontal=True,
-            )
+            # 🔎 UM ÚNICO CAMPO – ID OU Nº DE SÉRIE
+            valor_busca = st.text_input("🔎 ID ou Número de Série *")
 
-            if modo_busca == "ID do Pedido":
-                campo_busca = "id"
-                texto_label = "🔢 ID do Pedido"
-            else:
-                campo_busca = "numero_serie"
-                texto_label = "🔢 Número de Série"
-
-            valor_busca = st.text_input(f"{texto_label} *")
             opcoes_status = [f"{STATUS_EMOJIS[s]} {s}" for s in STATUS_PEDIDO]
             novo_status_formatado = st.selectbox("🔄 Novo Status", opcoes_status)
             novo_status = novo_status_formatado.split(" ", 1)[1]
@@ -507,7 +491,7 @@ def mostrar_formulario_atualizacao_status():
 
             if submitted:
                 if not valor_busca.strip():
-                    st.warning("⚠️ Por favor, informe o valor para busca.")
+                    st.warning("⚠️ Por favor, informe o ID ou o Número de Série.")
                     return
 
                 if df is None or (isinstance(df, list) and not df):
@@ -526,25 +510,23 @@ def mostrar_formulario_atualizacao_status():
                     return
 
                 registros = df.to_dict(orient="records")
+                # Ordenar do mais novo para o mais antigo (opcional, só por consistência)
+                registros = sorted(registros, key=parse_data_pedido, reverse=True)
 
-                # Normaliza campo de busca
                 valor_busca_norm = valor_busca.strip().lower()
 
                 pedido_encontrado = None
                 for row in registros:
-                    if campo_busca == "id":
-                        rid = str(row.get("id", "")).strip().lower()
-                        if rid == valor_busca_norm:
-                            pedido_encontrado = row
-                            break
-                    else:  # numero_serie
-                        rnum = str(row.get("numero_serie", "")).strip().lower()
-                        if rnum == valor_busca_norm:
-                            pedido_encontrado = row
-                            break
+                    rid = str(row.get("id", "")).strip().lower()
+                    rnum = str(row.get("numero_serie", "")).strip().lower()
+
+                    # compara exatamente com ID ou Nº de série
+                    if valor_busca_norm == rid or valor_busca_norm == rnum:
+                        pedido_encontrado = row
+                        break
 
                 if not pedido_encontrado:
-                    st.error("❌ Nenhum pedido encontrado com esse critério.")
+                    st.error("❌ Nenhum pedido encontrado com esse ID ou Número de Série.")
                     return
 
                 pedido_id_real = str(pedido_encontrado.get("id") or "")
@@ -585,6 +567,8 @@ def mostrar_formulario_atualizacao_status():
         return
 
     registros_sidebar = df_sidebar.to_dict(orient="records")
+    # ordenar do mais novo para o mais antigo
+    registros_sidebar = sorted(registros_sidebar, key=parse_data_pedido, reverse=True)
 
     for p in registros_sidebar:
         status = p.get("status", "Pendente")
@@ -614,8 +598,6 @@ def mostrar_formulario_atualizacao_status():
                     st.image(p["foto_url"], use_container_width=True)
                 except Exception:
                     st.warning("Não foi possível carregar a imagem deste pedido.")
-
-
 # --------------------------------------------------------------------
 # Session state + main
 # --------------------------------------------------------------------
