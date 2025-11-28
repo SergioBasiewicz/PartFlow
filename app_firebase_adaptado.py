@@ -38,7 +38,7 @@ EMAIL_CONFIG = {
     "sender_password": os.environ.get("EMAIL_PASSWORD", "SUA_SENHA"),
     "recipient_emails": [os.environ.get("RECIPIENT_EMAIL", "seu_email@exemplo.com")]
 }
-
+from firebase_funcoes import firebase_status
 # --------------------------------------------------------------------
 # Aparência geral
 # --------------------------------------------------------------------
@@ -629,6 +629,8 @@ def main():
     inicializar_session_state()
 
     st.title("📦 Controle de Pedidos de Peças Usadas")
+    status = firebase_status()
+    st.caption(f"Backend: USE_FIREBASE={status['USE_FIREBASE']} | BUCKET={status['BUCKET_NAME']}")
 
     # Info de debug do backend
     try:
@@ -653,6 +655,7 @@ def main():
         mostrar_lista_pedidos()
     elif menu == "Atualizar Status":
         mostrar_pagina_atualizar_status()
+
 
 
 
