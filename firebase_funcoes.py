@@ -9,9 +9,30 @@ import base64
 from pathlib import Path
 from datetime import datetime
 
-# --------------------------------------------------------------------
-# Configuração básica de caminhos para fallback local
-# --------------------------------------------------------------------
+# -------------------------------------------------------
+# 1) Lê credenciais de st.secrets (Cloud) ou env (local)
+# -------------------------------------------------------
+FIREBASE_CREDS_JSON = ""
+FIREBASE_BUCKET_ENV = ""
+
+try:
+    # No Streamlit Cloud, use st.secrets
+    import streamlit as st  # type: ignore
+
+    FIREBASE_CREDS_JSON = str(
+        st.secrets.get("GOOGLE_APPLICATION_CREDENTIALS_JSON", "")
+    ).strip()
+    FIREBASE_BUCKET_ENV = str(
+        st.secrets.get("FIREBASE_BUCKET", "")
+    ).strip()
+except Exception:
+    # Em desenvolvimento local, pode usar variáveis de ambiente
+    FIREBASE_CREDS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
+    FIREBASE_BUCKET_ENV = os.getenv("FIREBASE_BUCKET", "").strip()
+
+# -------------------------------------------------------
+# 2) Caminhos para fallback local
+# -------------------------------------------------------
 PROJECT_ROOT = Path(__file__).parent
 UPLOADS_DIR = PROJECT_ROOT / "uploads"
 LOCAL_DB = PROJECT_ROOT / "db_local.json"
@@ -24,17 +45,13 @@ def _ensure_local_storage():
         LOCAL_DB.write_text(json.dumps({"pedidos": []}, indent=2, ensure_ascii=False))
 
 
-# --------------------------------------------------------------------
-# Inicialização do Firebase (Firestore + Storage)
-# --------------------------------------------------------------------
+# -------------------------------------------------------
+# 3) Inicialização do Firebase (Firestore + Storage)
+# -------------------------------------------------------
 USE_FIREBASE = False
 firestore_client = None
 storage_client = None
 BUCKET_NAME = None
-
-# Lê secrets do Streamlit:
-FIREBASE_CREDS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
-FIREBASE_BUCKET_ENV = os.getenv("FIREBASE_BUCKET", "").strip()
 
 if FIREBASE_CREDS_JSON:
     try:
@@ -59,14 +76,13 @@ if FIREBASE_CREDS_JSON:
         if FIREBASE_BUCKET_ENV:
             BUCKET_NAME = FIREBASE_BUCKET_ENV
         else:
-            # tentativa padrão (caso você não configure FIREBASE_BUCKET)
-            BUCKET_NAME = f"{project_id}.firebasestorage.app"
+            # Padrão do Firebase Storage
+            BUCKET_NAME = f"{project_id}.appspot.com"
 
         USE_FIREBASE = True
         print("✅ Firebase inicializado com sucesso. Projeto:", project_id)
         print("✅ Bucket configurado:", BUCKET_NAME)
     except Exception as e:
-        # Se cair aqui, vamos usar apenas o fallback local.
         print("⚠️ Não foi possível inicializar Firebase, usando armazenamento local.")
         print("Motivo:", repr(e))
         USE_FIREBASE = False
@@ -75,9 +91,9 @@ else:
     USE_FIREBASE = False
 
 
-# --------------------------------------------------------------------
-# Funções utilitárias
-# --------------------------------------------------------------------
+# -------------------------------------------------------
+# 4) Funções utilitárias
+# -------------------------------------------------------
 def datetime_now_str():
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
@@ -91,9 +107,9 @@ def dataurl_para_bytes(data_url: str):
         return None
 
 
-# --------------------------------------------------------------------
-# Upload de foto
-# --------------------------------------------------------------------
+# -------------------------------------------------------
+# 5) Upload de foto
+# -------------------------------------------------------
 def upload_foto_bytes(nome_arquivo: str, bytes_data: bytes, pasta: str = "fotos"):
     """
     Sobe os bytes para o Firebase Storage e retorna URL pública.
@@ -107,12 +123,11 @@ def upload_foto_bytes(nome_arquivo: str, bytes_data: bytes, pasta: str = "fotos"
             blob = bucket.blob(blob_name)
             blob.upload_from_string(bytes_data, content_type="image/jpeg")
 
-            # Deixa público (ou gera signed URL se preferir)
+            # Deixa público (ou gera signed URL)
             try:
                 blob.make_public()
                 url = blob.public_url
             except Exception:
-                # signed url de 1 ano
                 url = blob.generate_signed_url(expiration=3600 * 24 * 365)
 
             print("📸 Foto enviada para Firebase Storage:", url)
@@ -129,15 +144,14 @@ def upload_foto_bytes(nome_arquivo: str, bytes_data: bytes, pasta: str = "fotos"
     with open(caminho, "wb") as f:
         f.write(bytes_data)
 
-    # No ambiente local, você pode usar file://; no Streamlit Cloud isso não vai persistir.
     local_url = f"file://{caminho.resolve()}"
     print("📸 Foto salva em modo local:", local_url)
     return local_url
 
 
-# --------------------------------------------------------------------
-# CRUD dos pedidos
-# --------------------------------------------------------------------
+# -------------------------------------------------------
+# 6) CRUD dos pedidos
+# -------------------------------------------------------
 def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
     """
     Salva novo pedido no Firestore (quando disponível) ou em db_local.json.
@@ -197,7 +211,6 @@ def listar_pedidos():
         try:
             from google.cloud import firestore as _fs
 
-            # Ordena por data_criacao (mais recentes primeiro)
             docs = (
                 firestore_client.collection("pedidos")
                 .order_by("data_criacao", direction=_fs.Query.DESCENDING)
@@ -285,11 +298,11 @@ def atualizar_pedido_foto(pedido_id: str, foto_url: str):
 
     print(f"⚠️ Pedido {pedido_id} não encontrado ao tentar atualizar foto (local).")
     return False
-    
+
+
 def firebase_status():
     """Retorna infos básicas sobre o backend (para debug na interface)."""
     return {
         "USE_FIREBASE": USE_FIREBASE,
         "BUCKET_NAME": BUCKET_NAME,
     }
-
