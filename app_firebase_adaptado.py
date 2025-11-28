@@ -626,21 +626,24 @@ def main():
 
     st.title("📦 Controle de Pedidos de Peças Usadas")
 
+    # 👇 Info de debug: mostra se está usando Firebase ou modo local
+    try:
+        status = firebase_status()
+        if status.get("USE_FIREBASE"):
+            modo = "✅ Firebase ONLINE (dados persistem após reboot)"
+        else:
+            modo = "⚠️ Modo LOCAL (dados somem quando o app reinicia)"
+        bucket = status.get("BUCKET_NAME") or "não configurado"
+        st.caption(f"{modo} • Bucket: `{bucket}`")
+    except Exception:
+        st.caption("⚠️ Não foi possível ler o status do backend (verifique firebase_funcoes.py)")
+
     menu = st.sidebar.selectbox(
         "📂 Menu",
         ["Adicionar Pedido", "Visualizar Pedidos", "Atualizar Status"],
     )
 
-    if menu == "Adicionar Pedido":
-        mostrar_formulario_adicionar_pedido()
-    elif menu == "Visualizar Pedidos":
-        mostrar_lista_pedidos()
-    elif menu == "Atualizar Status":
-        mostrar_pagina_atualizar_status()
 
-
-if __name__ == "__main__":
-    main()
 
 
 
