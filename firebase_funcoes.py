@@ -285,3 +285,11 @@ def atualizar_pedido_foto(pedido_id: str, foto_url: str):
 
     print(f"⚠️ Pedido {pedido_id} não encontrado ao tentar atualizar foto (local).")
     return False
+    
+def firebase_status():
+    """Retorna infos básicas sobre o backend (para debug na interface)."""
+    return {
+        "USE_FIREBASE": USE_FIREBASE,
+        "BUCKET_NAME": BUCKET_NAME,
+    }
+
