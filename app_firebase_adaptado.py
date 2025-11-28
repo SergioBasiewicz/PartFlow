@@ -355,6 +355,7 @@ def mostrar_lista_pedidos():
 
     pedidos = []
     for row in registros:
+        foto_url = row.get("foto_url", "")
         pedidos.append(
             {
                 "id": row.get("id", row.get("ID", "")) or row.get("id", ""),
@@ -366,9 +367,13 @@ def mostrar_lista_pedidos():
                 "os": row.get("ordem_servico", row.get("os", "")),
                 "observacoes": row.get("observacoes", ""),
                 "status": row.get("status", ""),
-                "tem_foto": str(row.get("tem_foto", "")).lower() in ("true", "sim", "yes", "1"),
-                "foto_url": row.get("foto_url", ""),
+                # considera que TEM foto se houver foto_url OU se o campo tem_foto vier marcado
+                "foto_url": foto_url,
+                "tem_foto": bool(foto_url)
+                or str(row.get("tem_foto", "")).lower() in ("true", "sim", "yes", "1"),
             }
+        )
+
         )
 
     # Expanders por pedido
@@ -630,4 +635,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
