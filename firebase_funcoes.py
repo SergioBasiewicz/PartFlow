@@ -9,30 +9,9 @@ import base64
 from pathlib import Path
 from datetime import datetime
 
-# -------------------------------------------------------
-# 1) Lê credenciais de st.secrets (Cloud) ou env (local)
-# -------------------------------------------------------
-FIREBASE_CREDS_JSON = ""
-FIREBASE_BUCKET_ENV = ""
-
-try:
-    # No Streamlit Cloud, use st.secrets
-    import streamlit as st  # type: ignore
-
-    FIREBASE_CREDS_JSON = str(
-        st.secrets.get("GOOGLE_APPLICATION_CREDENTIALS_JSON", "")
-    ).strip()
-    FIREBASE_BUCKET_ENV = str(
-        st.secrets.get("FIREBASE_BUCKET", "")
-    ).strip()
-except Exception:
-    # Em desenvolvimento local, pode usar variáveis de ambiente
-    FIREBASE_CREDS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
-    FIREBASE_BUCKET_ENV = os.getenv("FIREBASE_BUCKET", "").strip()
-
-# -------------------------------------------------------
-# 2) Caminhos para fallback local
-# -------------------------------------------------------
+# --------------------------------------------------------------------
+# Configuração básica de caminhos para fallback local
+# --------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).parent
 UPLOADS_DIR = PROJECT_ROOT / "uploads"
 LOCAL_DB = PROJECT_ROOT / "db_local.json"
@@ -45,13 +24,17 @@ def _ensure_local_storage():
         LOCAL_DB.write_text(json.dumps({"pedidos": []}, indent=2, ensure_ascii=False))
 
 
-# -------------------------------------------------------
-# 3) Inicialização do Firebase (Firestore + Storage)
-# -------------------------------------------------------
+# --------------------------------------------------------------------
+# Inicialização do Firebase (Firestore + Storage)
+# --------------------------------------------------------------------
 USE_FIREBASE = False
 firestore_client = None
 storage_client = None
 BUCKET_NAME = None
+
+# Lê secrets do ambiente (Streamlit Cloud usa os secrets como env vars)
+FIREBASE_CREDS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
+FIREBASE_BUCKET_ENV = os.getenv("FIREBASE_BUCKET", "").strip()
 
 if FIREBASE_CREDS_JSON:
     try:
@@ -72,17 +55,18 @@ if FIREBASE_CREDS_JSON:
         firestore_client = firestore.Client(project=project_id, credentials=credentials)
         storage_client = storage.Client(project=project_id, credentials=credentials)
 
-        # Bucket: usa FIREBASE_BUCKET do secrets ou padrão novo
+        # Bucket: usa FIREBASE_BUCKET do secrets, ou um padrão se não tiver
         if FIREBASE_BUCKET_ENV:
             BUCKET_NAME = FIREBASE_BUCKET_ENV
         else:
-            # novo formato padrão do Firebase
+            # Novo padrão do Firebase Storage
             BUCKET_NAME = f"{project_id}.firebasestorage.app"
 
         USE_FIREBASE = True
         print("✅ Firebase inicializado com sucesso. Projeto:", project_id)
         print("✅ Bucket configurado:", BUCKET_NAME)
     except Exception as e:
+        # Se cair aqui, vamos usar apenas o fallback local.
         print("⚠️ Não foi possível inicializar Firebase, usando armazenamento local.")
         print("Motivo:", repr(e))
         USE_FIREBASE = False
@@ -91,9 +75,9 @@ else:
     USE_FIREBASE = False
 
 
-# -------------------------------------------------------
-# 4) Funções utilitárias
-# -------------------------------------------------------
+# --------------------------------------------------------------------
+# Funções utilitárias
+# --------------------------------------------------------------------
 def datetime_now_str():
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
@@ -107,15 +91,15 @@ def dataurl_para_bytes(data_url: str):
         return None
 
 
-# -------------------------------------------------------
-# 5) Upload de foto
-# -------------------------------------------------------
+# --------------------------------------------------------------------
+# Upload de foto
+# --------------------------------------------------------------------
 def upload_foto_bytes(nome_arquivo: str, bytes_data: bytes, pasta: str = "fotos"):
     """
     Sobe os bytes para o Firebase Storage e retorna URL pública.
     Se Firebase não estiver disponível, salva localmente (fallback).
     """
-    # ----- Caminho Firebase -----
+    # ----- Firebase Storage -----
     if USE_FIREBASE and storage_client and BUCKET_NAME:
         try:
             bucket = storage_client.bucket(BUCKET_NAME)
@@ -123,21 +107,22 @@ def upload_foto_bytes(nome_arquivo: str, bytes_data: bytes, pasta: str = "fotos"
             blob = bucket.blob(blob_name)
             blob.upload_from_string(bytes_data, content_type="image/jpeg")
 
-            # Deixa público (ou gera signed URL)
+            # Deixa público (ou gera signed URL se preferir)
             try:
                 blob.make_public()
                 url = blob.public_url
             except Exception:
+                # Signed URL de 1 ano
                 url = blob.generate_signed_url(expiration=3600 * 24 * 365)
 
             print("📸 Foto enviada para Firebase Storage:", url)
             return url
         except Exception as e:
-            print("⚠️ Erro ao subir foto no Firebase Storage, prosseguindo SEM foto.")
+            print("⚠️ Erro ao subir foto no Firebase Storage, usando fallback local.")
             print("Motivo:", repr(e))
-            # Não fazemos fallback geral aqui, apenas seguimos sem foto
+            # Continua para fallback
 
-    # ----- Fallback local (apenas em desenvolvimento) -----
+    # ----- Fallback local -----
     _ensure_local_storage()
     nome = f"{uuid.uuid4().hex}_{nome_arquivo}"
     caminho = UPLOADS_DIR / nome
@@ -149,9 +134,9 @@ def upload_foto_bytes(nome_arquivo: str, bytes_data: bytes, pasta: str = "fotos"
     return local_url
 
 
-# -------------------------------------------------------
-# 6) CRUD dos pedidos
-# -------------------------------------------------------
+# --------------------------------------------------------------------
+# CRUD dos pedidos
+# --------------------------------------------------------------------
 def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
     """
     Salva novo pedido no Firestore (quando disponível) ou em db_local.json.
@@ -165,16 +150,11 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
     # 1) Tenta usar Firebase
     if USE_FIREBASE and firestore_client:
         try:
-            # Tenta subir foto, mas NÃO derruba o Firestore se falhar
             if foto_bytes:
-                try:
-                    foto_url = upload_foto_bytes(nome_foto, foto_bytes)
-                    if foto_url:
-                        dados["foto_url"] = foto_url
-                        dados["tem_foto"] = True
-                except Exception as e:
-                    print("⚠️ Falha ao enviar foto, salvando pedido sem foto.")
-                    print("Motivo:", repr(e))
+                foto_url = upload_foto_bytes(nome_foto, foto_bytes)
+                if foto_url:
+                    dados["foto_url"] = foto_url
+                    dados["tem_foto"] = True
 
             if "data_criacao" not in dados:
                 dados["data_criacao"] = datetime_now_str()
@@ -185,7 +165,7 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
             print("✅ Pedido salvo no Firestore com ID:", doc_ref.id)
             return {"id": doc_ref.id, "foto_url": foto_url}
         except Exception as e:
-            print("⚠️ Erro em salvar_pedido (Firestore). Indo para fallback local.")
+            print("⚠️ Erro em salvar_pedido (Firebase). Indo para fallback local.")
             print("Motivo:", repr(e))
 
     # 2) Fallback local
@@ -195,13 +175,10 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
     dados_local = dict(dados)
     dados_local["id"] = novo_id
 
-    if foto_bytes and not foto_url:
-        try:
-            foto_url = upload_foto_bytes(nome_foto, foto_bytes)
-            dados_local["foto_url"] = foto_url
-            dados_local["tem_foto"] = True
-        except Exception as e:
-            print("⚠️ Falha ao salvar foto no modo local:", repr(e))
+    if foto_bytes:
+        foto_url = upload_foto_bytes(nome_foto, foto_bytes)
+        dados_local["foto_url"] = foto_url
+        dados_local["tem_foto"] = True
 
     if "data_criacao" not in dados_local:
         dados_local["data_criacao"] = datetime_now_str()
@@ -219,6 +196,7 @@ def listar_pedidos():
         try:
             from google.cloud import firestore as _fs
 
+            # Ordena por data_criacao (mais recentes primeiro)
             docs = (
                 firestore_client.collection("pedidos")
                 .order_by("data_criacao", direction=_fs.Query.DESCENDING)
