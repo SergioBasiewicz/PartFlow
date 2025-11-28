@@ -361,7 +361,9 @@ def mostrar_lista_pedidos():
 
     pedidos = []
     for row in registros:
+        # pega a URL da foto (se existir)
         foto_url = row.get("foto_url", "")
+
         pedidos.append(
             {
                 "id": row.get("id", row.get("ID", "")) or row.get("id", ""),
@@ -373,13 +375,11 @@ def mostrar_lista_pedidos():
                 "os": row.get("ordem_servico", row.get("os", "")),
                 "observacoes": row.get("observacoes", ""),
                 "status": row.get("status", ""),
-                # considera que TEM foto se houver foto_url OU se o campo tem_foto vier marcado
                 "foto_url": foto_url,
+                # considera que TEM foto se houver foto_url OU se o campo tem_foto estiver marcado
                 "tem_foto": bool(foto_url)
                 or str(row.get("tem_foto", "")).lower() in ("true", "sim", "yes", "1"),
             }
-        )
-
         )
 
     # Expanders por pedido
@@ -418,8 +418,11 @@ def mostrar_lista_pedidos():
 
             # Foto
             if pedido["tem_foto"]:
-                foto_info = None
-                if "fotos_pedidos" in st.session_state and pedido["id"] in st.session_state.fotos_pedidos:
+                # 1) tenta usar o que está em memória
+                if (
+                    "fotos_pedidos" in st.session_state
+                    and pedido["id"] in st.session_state.fotos_pedidos
+                ):
                     foto_info = st.session_state.fotos_pedidos[pedido["id"]]
                     try:
                         st.image(
@@ -429,12 +432,12 @@ def mostrar_lista_pedidos():
                         )
                     except Exception:
                         pass
-                else:
-                    if pedido["foto_url"]:
-                        try:
-                            st.image(pedido["foto_url"], use_container_width=True)
-                        except Exception:
-                            st.warning("Não foi possível carregar a imagem deste pedido.")
+                # 2) se não tiver em memória, usa a URL salva no banco
+                elif pedido["foto_url"]:
+                    try:
+                        st.image(pedido["foto_url"], use_container_width=True)
+                    except Exception:
+                        st.warning("Não foi possível carregar a imagem deste pedido.")
 
     # Estatísticas gerais
     try:
@@ -456,6 +459,7 @@ def mostrar_lista_pedidos():
             st.metric("🟢 Entregues", f"{entregues} ({taxa:.1f}%)")
     except Exception as e:
         st.error(f"Erro ao calcular estatísticas: {e}")
+
 
 # --------------------------------------------------------------------
 # Tela: Atualizar Status (com pré-visualização na sidebar)
@@ -626,7 +630,7 @@ def main():
 
     st.title("📦 Controle de Pedidos de Peças Usadas")
 
-    # 👇 Info de debug: mostra se está usando Firebase ou modo local
+    # Info de debug do backend
     try:
         status = firebase_status()
         if status.get("USE_FIREBASE"):
@@ -642,6 +646,15 @@ def main():
         "📂 Menu",
         ["Adicionar Pedido", "Visualizar Pedidos", "Atualizar Status"],
     )
+
+    if menu == "Adicionar Pedido":
+        mostrar_formulario_adicionar_pedido()
+    elif menu == "Visualizar Pedidos":
+        mostrar_lista_pedidos()
+    elif menu == "Atualizar Status":
+        mostrar_pagina_atualizar_status()
+
+
 
 
 
