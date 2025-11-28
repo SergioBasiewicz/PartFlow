@@ -1,12 +1,6 @@
 # firebase_funcoes.py
-# Versão ajustada para Streamlit Cloud + Firebase Storage + Firestore
-# Usa:
-#   - GOOGLE_APPLICATION_CREDENTIALS_JSON (secrets)
-#   - FIREBASE_BUCKET (secrets)
-#
-# Se algo der errado na inicialização do Firebase, cai em modo local
-# (salva JSON em db_local.json e fotos em ./uploads) e escreve logs
-# no console.
+# Integração com Firestore + Storage (usando secrets do Streamlit Cloud)
+# Fallback local (db_local.json) apenas se NÃO houver credenciais válidas.
 
 import os
 import uuid
@@ -15,187 +9,195 @@ import base64
 from pathlib import Path
 from datetime import datetime
 
-# -----------------------------------------------------------------------------
-# Configuração de caminhos para modo LOCAL (fallback)
-# -----------------------------------------------------------------------------
+# --------------------------------------------------------------------
+# Configuração básica de caminhos para fallback local
+# --------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).parent
 UPLOADS_DIR = PROJECT_ROOT / "uploads"
 LOCAL_DB = PROJECT_ROOT / "db_local.json"
 
 
 def _ensure_local_storage():
-    """Garante que pasta uploads/ e arquivo db_local.json existam."""
+    """Garante pasta uploads/ e arquivo db_local.json (fallback local)."""
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     if not LOCAL_DB.exists():
         LOCAL_DB.write_text(json.dumps({"pedidos": []}, indent=2, ensure_ascii=False))
 
 
-# -----------------------------------------------------------------------------
-# Tentativa de inicializar Firebase (Storage + Firestore)
-# -----------------------------------------------------------------------------
-USE_FIREBASE = True
-storage_client = None
+# --------------------------------------------------------------------
+# Inicialização do Firebase (Firestore + Storage)
+# --------------------------------------------------------------------
+USE_FIREBASE = False
 firestore_client = None
+storage_client = None
 BUCKET_NAME = None
 
-try:
-    from google.cloud import storage, firestore
-    from google.oauth2 import service_account
-except Exception as e:
-    print("⚠️ [firebase_funcoes] Não foi possível importar bibliotecas do Google Cloud:", e)
-    USE_FIREBASE = False
+# Lê secrets do Streamlit:
+FIREBASE_CREDS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
+FIREBASE_BUCKET_ENV = os.getenv("FIREBASE_BUCKET", "").strip()
 
-if USE_FIREBASE:
+if FIREBASE_CREDS_JSON:
     try:
-        # Lê credenciais do secret GOOGLE_APPLICATION_CREDENTIALS_JSON
-        creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
-        if not creds_json:
-            raise RuntimeError("Variável de ambiente GOOGLE_APPLICATION_CREDENTIALS_JSON não encontrada.")
+        from google.cloud import firestore, storage
+        from google.oauth2 import service_account
 
-        creds_dict = json.loads(creds_json)
+        # Carrega o JSON do secret como dict
+        creds_dict = json.loads(FIREBASE_CREDS_JSON)
+
+        # Cria credentials a partir do dict
         credentials = service_account.Credentials.from_service_account_info(creds_dict)
+
         project_id = creds_dict.get("project_id")
         if not project_id:
-            raise RuntimeError("project_id ausente no JSON de credenciais.")
+            raise RuntimeError("project_id não encontrado nas credenciais.")
 
-        # Inicializa clients
-        storage_client = storage.Client(project=project_id, credentials=credentials)
+        # Clients do Firestore e Storage
         firestore_client = firestore.Client(project=project_id, credentials=credentials)
+        storage_client = storage.Client(project=project_id, credentials=credentials)
 
-        # Bucket: pega do secret FIREBASE_BUCKET ou deduz padrão
-        BUCKET_NAME = os.getenv("FIREBASE_BUCKET", "").strip()
-        if not BUCKET_NAME:
-            # fallback pra padrão antigo, se você não definir FIREBASE_BUCKET
-            BUCKET_NAME = f"{project_id}.appspot.com"
+        # Bucket: usa FIREBASE_BUCKET do secrets
+        if FIREBASE_BUCKET_ENV:
+            BUCKET_NAME = FIREBASE_BUCKET_ENV
+        else:
+            # tentativa padrão (caso você não configure FIREBASE_BUCKET)
+            BUCKET_NAME = f"{project_id}.firebasestorage.app"
 
-        print(f"✅ [firebase_funcoes] Firebase inicializado. Projeto: {project_id}, Bucket: {BUCKET_NAME}")
-
+        USE_FIREBASE = True
+        print("✅ Firebase inicializado com sucesso. Projeto:", project_id)
+        print("✅ Bucket configurado:", BUCKET_NAME)
     except Exception as e:
-        print("⚠️ [firebase_funcoes] Falha ao inicializar Firebase, usando modo LOCAL:", e)
+        # Se cair aqui, vamos usar apenas o fallback local.
+        print("⚠️ Não foi possível inicializar Firebase, usando armazenamento local.")
+        print("Motivo:", repr(e))
         USE_FIREBASE = False
-        storage_client = None
-        firestore_client = None
+else:
+    print("⚠️ GOOGLE_APPLICATION_CREDENTIALS_JSON não definido. Usando armazenamento local.")
+    USE_FIREBASE = False
 
 
-# -----------------------------------------------------------------------------
-# Funções auxiliares
-# -----------------------------------------------------------------------------
+# --------------------------------------------------------------------
+# Funções utilitárias
+# --------------------------------------------------------------------
 def datetime_now_str():
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
 
 def dataurl_para_bytes(data_url: str):
-    """Converte data:image/...;base64,... em bytes."""
+    """Converte data:image/...;base64,... para bytes."""
     try:
         header, b64 = data_url.split(",", 1)
         return base64.b64decode(b64)
-    except Exception as e:
-        print("⚠️ [firebase_funcoes] Erro ao converter data_url para bytes:", e)
+    except Exception:
         return None
 
 
-# -----------------------------------------------------------------------------
+# --------------------------------------------------------------------
 # Upload de foto
-# -----------------------------------------------------------------------------
-def upload_foto_bytes(nome_arquivo: str, bytes_data: bytes, pasta: str = "fotos") -> str:
+# --------------------------------------------------------------------
+def upload_foto_bytes(nome_arquivo: str, bytes_data: bytes, pasta: str = "fotos"):
     """
-    Faz upload dos bytes e retorna URL pública (Firebase Storage)
-    ou caminho local (modo fallback).
+    Sobe os bytes para o Firebase Storage e retorna URL pública.
+    Se Firebase não estiver disponível, salva localmente (fallback).
     """
-    # Tenta Firebase primeiro
-    if USE_FIREBASE and storage_client:
+    # ----- Caminho Firebase -----
+    if USE_FIREBASE and storage_client and BUCKET_NAME:
         try:
             bucket = storage_client.bucket(BUCKET_NAME)
             blob_name = f"{pasta}/{uuid.uuid4().hex}_{nome_arquivo}"
             blob = bucket.blob(blob_name)
-
             blob.upload_from_string(bytes_data, content_type="image/jpeg")
-            # Tenta deixar público
+
+            # Deixa público (ou gera signed URL se preferir)
             try:
                 blob.make_public()
                 url = blob.public_url
             except Exception:
-                # Se não der pra deixar público, gera URL assinada longa
+                # signed url de 1 ano
                 url = blob.generate_signed_url(expiration=3600 * 24 * 365)
 
-            print(f"✅ [firebase_funcoes] Foto enviada para Storage: {blob_name}")
+            print("📸 Foto enviada para Firebase Storage:", url)
             return url
-
         except Exception as e:
-            print("⚠️ [firebase_funcoes] Erro no upload para Firebase Storage, caindo para modo LOCAL:", e)
+            print("⚠️ Erro ao subir foto no Firebase Storage, usando fallback local.")
+            print("Motivo:", repr(e))
+            # Continua para fallback
 
-    # Fallback local
+    # ----- Fallback local -----
     _ensure_local_storage()
     nome = f"{uuid.uuid4().hex}_{nome_arquivo}"
     caminho = UPLOADS_DIR / nome
     with open(caminho, "wb") as f:
         f.write(bytes_data)
 
+    # No ambiente local, você pode usar file://; no Streamlit Cloud isso não vai persistir.
     local_url = f"file://{caminho.resolve()}"
-    print(f"💾 [firebase_funcoes] Foto salva localmente em {local_url}")
+    print("📸 Foto salva em modo local:", local_url)
     return local_url
 
 
-# -----------------------------------------------------------------------------
-# CRUD de pedidos
-# -----------------------------------------------------------------------------
+# --------------------------------------------------------------------
+# CRUD dos pedidos
+# --------------------------------------------------------------------
 def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
     """
-    Salva novo pedido no Firestore (se disponível) ou em db_local.json.
-    Retorna:
-      - dict {"id": <id>, "foto_url": <url>}  (modo Firebase)
-      - dict {"id": <id>, "foto_url": <url_ou_None>} (modo local)
+    Salva novo pedido no Firestore (quando disponível) ou em db_local.json.
+    Retorna dict com 'id' e opcionalmente 'foto_url'.
     """
     if foto_bytes and not nome_foto:
         nome_foto = f"{uuid.uuid4().hex}.jpg"
 
-    dados_a_salvar = dict(dados)  # cópia pra não mutar original
-
-    # Garante timestamp
-    if "data_criacao" not in dados_a_salvar:
-        dados_a_salvar["data_criacao"] = datetime_now_str()
-
     foto_url = None
-    if foto_bytes:
-        foto_url = upload_foto_bytes(nome_foto, foto_bytes)
-        if foto_url:
-            dados_a_salvar["foto_url"] = foto_url
-            dados_a_salvar["tem_foto"] = True
 
-    # --- Firebase Firestore ---
+    # 1) Tenta usar Firebase
     if USE_FIREBASE and firestore_client:
         try:
+            if foto_bytes:
+                foto_url = upload_foto_bytes(nome_foto, foto_bytes)
+                if foto_url:
+                    dados["foto_url"] = foto_url
+                    dados["tem_foto"] = True
+
+            if "data_criacao" not in dados:
+                dados["data_criacao"] = datetime_now_str()
+
             doc_ref = firestore_client.collection("pedidos").document()
-            doc_ref.set(dados_a_salvar)
-            print(f"✅ [firebase_funcoes] Pedido salvo no Firestore com ID {doc_ref.id}")
+            doc_ref.set(dados)
+
+            print("✅ Pedido salvo no Firestore com ID:", doc_ref.id)
             return {"id": doc_ref.id, "foto_url": foto_url}
         except Exception as e:
-            print("⚠️ [firebase_funcoes] Erro ao salvar pedido no Firestore, usando modo LOCAL:", e)
+            print("⚠️ Erro em salvar_pedido (Firebase). Indo para fallback local.")
+            print("Motivo:", repr(e))
 
-    # --- Fallback LOCAL ---
+    # 2) Fallback local
     _ensure_local_storage()
-    db = json.loads(LOCAL_DB.read_text(encoding="utf-8"))
+    db = json.loads(LOCAL_DB.read_text())
     novo_id = uuid.uuid4().hex[:8]
-    dados_local = dict(dados_a_salvar)
+    dados_local = dict(dados)
     dados_local["id"] = novo_id
-    db["pedidos"].append(dados_local)
-    LOCAL_DB.write_text(json.dumps(db, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    print(f"💾 [firebase_funcoes] Pedido salvo em db_local.json com ID {novo_id}")
+    if foto_bytes:
+        foto_url = upload_foto_bytes(nome_foto, foto_bytes)
+        dados_local["foto_url"] = foto_url
+        dados_local["tem_foto"] = True
+
+    if "data_criacao" not in dados_local:
+        dados_local["data_criacao"] = datetime_now_str()
+
+    db["pedidos"].append(dados_local)
+    LOCAL_DB.write_text(json.dumps(db, indent=2, ensure_ascii=False))
+    print("💾 Pedido salvo em arquivo local com ID:", novo_id)
     return {"id": novo_id, "foto_url": foto_url}
 
 
 def listar_pedidos():
-    """
-    Retorna lista de pedidos como lista de dicts.
-    Prioriza Firestore; se falhar, usa db_local.json.
-    """
-    # Firestore
+    """Retorna lista de pedidos como lista de dicts."""
+    # Firebase
     if USE_FIREBASE and firestore_client:
         try:
             from google.cloud import firestore as _fs
 
-            # ordenar por data_criacao asc ou desc (aqui DESC)
+            # Ordena por data_criacao (mais recentes primeiro)
             docs = (
                 firestore_client.collection("pedidos")
                 .order_by("data_criacao", direction=_fs.Query.DESCENDING)
@@ -206,47 +208,80 @@ def listar_pedidos():
                 obj = d.to_dict()
                 obj["id"] = d.id
                 res.append(obj)
-            print(f"✅ [firebase_funcoes] {len(res)} pedidos carregados do Firestore")
+            print(f"📥 listar_pedidos: {len(res)} registros do Firestore.")
             return res
-
         except Exception as e:
-            print("⚠️ [firebase_funcoes] Erro ao listar pedidos do Firestore, usando modo LOCAL:", e)
+            print("⚠️ Erro em listar_pedidos (Firebase). Usando fallback local.")
+            print("Motivo:", repr(e))
 
-    # Local
+    # Fallback local
     _ensure_local_storage()
-    db = json.loads(LOCAL_DB.read_text(encoding="utf-8"))
-    pedidos = db.get("pedidos", [])
-    print(f"💾 [firebase_funcoes] {len(pedidos)} pedidos carregados de db_local.json")
-    return pedidos
+    db = json.loads(LOCAL_DB.read_text())
+    res = db.get("pedidos", [])
+    print(f"📥 listar_pedidos: {len(res)} registros do arquivo local.")
+    return res
 
 
-def atualizar_status(pedido_id: str, novo_status: str) -> bool:
-    """
-    Atualiza o campo 'status' do pedido.
-    Retorna True se conseguiu, False caso contrário.
-    """
-    # Firestore primeiro
+def atualizar_status(pedido_id: str, novo_status: str):
+    """Atualiza o status de um pedido."""
+    # Firebase
     if USE_FIREBASE and firestore_client:
         try:
             doc_ref = firestore_client.collection("pedidos").document(pedido_id)
             doc_ref.update({"status": novo_status})
-            print(f"✅ [firebase_funcoes] Status do pedido {pedido_id} atualizado no Firestore para {novo_status}")
+            print(f"✅ Status do pedido {pedido_id} atualizado no Firestore para {novo_status}.")
             return True
         except Exception as e:
-            print("⚠️ [firebase_funcoes] Erro ao atualizar status no Firestore, tentando modo LOCAL:", e)
+            print("⚠️ Erro em atualizar_status (Firebase). Tentando fallback local.")
+            print("Motivo:", repr(e))
 
-    # Local
+    # Fallback local
     _ensure_local_storage()
-    db = json.loads(LOCAL_DB.read_text(encoding="utf-8"))
-    alterou = False
-    for p in db.get("pedidos", []):
+    db = json.loads(LOCAL_DB.read_text())
+    alterado = False
+    for p in db["pedidos"]:
         if p.get("id") == pedido_id:
             p["status"] = novo_status
-            alterou = True
+            alterado = True
             break
-    if alterou:
-        LOCAL_DB.write_text(json.dumps(db, indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"💾 [firebase_funcoes] Status do pedido {pedido_id} atualizado em db_local.json para {novo_status}")
+
+    if alterado:
+        LOCAL_DB.write_text(json.dumps(db, indent=2, ensure_ascii=False))
+        print(f"💾 Status do pedido {pedido_id} atualizado no arquivo local para {novo_status}.")
     else:
-        print(f"⚠️ [firebase_funcoes] Pedido {pedido_id} não encontrado em db_local.json")
-    return alterou
+        print(f"⚠️ Pedido {pedido_id} não encontrado no arquivo local.")
+
+    return alterado
+
+
+def atualizar_pedido_foto(pedido_id: str, foto_url: str):
+    """Atualiza campos de foto de um pedido."""
+    # Firebase
+    if USE_FIREBASE and firestore_client:
+        try:
+            doc_ref = firestore_client.collection("pedidos").document(pedido_id)
+            doc_ref.update({"foto_url": foto_url, "tem_foto": True})
+            print(f"✅ Foto do pedido {pedido_id} atualizada no Firestore.")
+            return True
+        except Exception as e:
+            print("⚠️ Erro em atualizar_pedido_foto (Firebase). Tentando fallback local.")
+            print("Motivo:", repr(e))
+
+    # Fallback local
+    _ensure_local_storage()
+    db = json.loads(LOCAL_DB.read_text())
+    alterado = False
+    for p in db["pedidos"]:
+        if p.get("id") == pedido_id:
+            p["foto_url"] = foto_url
+            p["tem_foto"] = True
+            alterado = True
+            break
+
+    if alterado:
+        LOCAL_DB.write_text(json.dumps(db, indent=2, ensure_ascii=False))
+        print(f"💾 Foto do pedido {pedido_id} atualizada no arquivo local.")
+        return True
+
+    print(f"⚠️ Pedido {pedido_id} não encontrado ao tentar atualizar foto (local).")
+    return False
