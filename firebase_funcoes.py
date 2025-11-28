@@ -72,12 +72,12 @@ if FIREBASE_CREDS_JSON:
         firestore_client = firestore.Client(project=project_id, credentials=credentials)
         storage_client = storage.Client(project=project_id, credentials=credentials)
 
-        # Bucket: usa FIREBASE_BUCKET do secrets
+        # Bucket: usa FIREBASE_BUCKET do secrets ou padrão novo
         if FIREBASE_BUCKET_ENV:
             BUCKET_NAME = FIREBASE_BUCKET_ENV
         else:
-            # Padrão do Firebase Storage
-            BUCKET_NAME = f"{project_id}.appspot.com"
+            # novo formato padrão do Firebase
+            BUCKET_NAME = f"{project_id}.firebasestorage.app"
 
         USE_FIREBASE = True
         print("✅ Firebase inicializado com sucesso. Projeto:", project_id)
@@ -133,11 +133,11 @@ def upload_foto_bytes(nome_arquivo: str, bytes_data: bytes, pasta: str = "fotos"
             print("📸 Foto enviada para Firebase Storage:", url)
             return url
         except Exception as e:
-            print("⚠️ Erro ao subir foto no Firebase Storage, usando fallback local.")
+            print("⚠️ Erro ao subir foto no Firebase Storage, prosseguindo SEM foto.")
             print("Motivo:", repr(e))
-            # Continua para fallback
+            # Não fazemos fallback geral aqui, apenas seguimos sem foto
 
-    # ----- Fallback local -----
+    # ----- Fallback local (apenas em desenvolvimento) -----
     _ensure_local_storage()
     nome = f"{uuid.uuid4().hex}_{nome_arquivo}"
     caminho = UPLOADS_DIR / nome
@@ -165,11 +165,16 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
     # 1) Tenta usar Firebase
     if USE_FIREBASE and firestore_client:
         try:
+            # Tenta subir foto, mas NÃO derruba o Firestore se falhar
             if foto_bytes:
-                foto_url = upload_foto_bytes(nome_foto, foto_bytes)
-                if foto_url:
-                    dados["foto_url"] = foto_url
-                    dados["tem_foto"] = True
+                try:
+                    foto_url = upload_foto_bytes(nome_foto, foto_bytes)
+                    if foto_url:
+                        dados["foto_url"] = foto_url
+                        dados["tem_foto"] = True
+                except Exception as e:
+                    print("⚠️ Falha ao enviar foto, salvando pedido sem foto.")
+                    print("Motivo:", repr(e))
 
             if "data_criacao" not in dados:
                 dados["data_criacao"] = datetime_now_str()
@@ -180,7 +185,7 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
             print("✅ Pedido salvo no Firestore com ID:", doc_ref.id)
             return {"id": doc_ref.id, "foto_url": foto_url}
         except Exception as e:
-            print("⚠️ Erro em salvar_pedido (Firebase). Indo para fallback local.")
+            print("⚠️ Erro em salvar_pedido (Firestore). Indo para fallback local.")
             print("Motivo:", repr(e))
 
     # 2) Fallback local
@@ -190,10 +195,13 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
     dados_local = dict(dados)
     dados_local["id"] = novo_id
 
-    if foto_bytes:
-        foto_url = upload_foto_bytes(nome_foto, foto_bytes)
-        dados_local["foto_url"] = foto_url
-        dados_local["tem_foto"] = True
+    if foto_bytes and not foto_url:
+        try:
+            foto_url = upload_foto_bytes(nome_foto, foto_bytes)
+            dados_local["foto_url"] = foto_url
+            dados_local["tem_foto"] = True
+        except Exception as e:
+            print("⚠️ Falha ao salvar foto no modo local:", repr(e))
 
     if "data_criacao" not in dados_local:
         dados_local["data_criacao"] = datetime_now_str()
