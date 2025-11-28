@@ -11,7 +11,13 @@ import io
 import os
 
 # Funções do Firebase – mantenha seu firebase_funcoes.py configurado
-from firebase_funcoes import salvar_pedido, listar_pedidos, atualizar_status, dataurl_para_bytes
+from firebase_funcoes import (
+    salvar_pedido,
+    listar_pedidos,
+    atualizar_status,
+    dataurl_para_bytes,
+    firebase_status,
+)
 
 # --------------------------------------------------------------------
 # Configurações gerais
@@ -635,5 +641,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
