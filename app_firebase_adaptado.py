@@ -28,7 +28,7 @@ STATUS_PEDIDO = ["Pendente", "Solicitado", "Entregue"]
 STATUS_EMOJIS = {
     "Pendente": "🔴",
     "Solicitado": "🟡",
-    "Entregue": "🟢"
+    "Entregue": "🟢",
 }
 
 EMAIL_CONFIG = {
@@ -36,9 +36,9 @@ EMAIL_CONFIG = {
     "smtp_port": 587,
     "sender_email": os.environ.get("SENDER_EMAIL", "seu_email@exemplo.com"),
     "sender_password": os.environ.get("EMAIL_PASSWORD", "SUA_SENHA"),
-    "recipient_emails": [os.environ.get("RECIPIENT_EMAIL", "seu_email@exemplo.com")]
+    "recipient_emails": [os.environ.get("RECIPIENT_EMAIL", "seu_email@exemplo.com")],
 }
-from firebase_funcoes import firebase_status
+
 # --------------------------------------------------------------------
 # Aparência geral
 # --------------------------------------------------------------------
@@ -46,7 +46,7 @@ def configurar_pagina():
     st.set_page_config(
         page_title="Controle de Pedidos",
         page_icon="📦",
-        layout="wide"
+        layout="wide",
     )
 
     css = """
@@ -74,11 +74,12 @@ def configurar_pagina():
     """
     st.markdown(css, unsafe_allow_html=True)
 
+
 # --------------------------------------------------------------------
 # Utilitários de imagem
 # --------------------------------------------------------------------
 def processar_upload_foto(uploaded_file, pedido_id):
-    """Processa upload, converte e gera data_url para preview."""
+    """Processa upload, converte e gera data_url para envio ao backend."""
     if uploaded_file is None:
         return None
 
@@ -119,14 +120,6 @@ def processar_upload_foto(uploaded_file, pedido_id):
         return None
 
 
-def mostrar_foto(foto_info):
-    if foto_info and "data_url" in foto_info:
-        st.image(
-            foto_info["data_url"],
-            caption=f"📸 {foto_info['nome']} ({foto_info['dimensoes'][0]}x{foto_info['dimensoes'][1]})",
-            use_container_width=True,
-        )
-
 # --------------------------------------------------------------------
 # Helpers gerais
 # --------------------------------------------------------------------
@@ -160,10 +153,12 @@ def parse_data_pedido(row: dict):
     Converte o campo de data (data_criacao / data / timestamp) para datetime
     para permitir ordenar do mais novo para o mais antigo.
     """
+    from datetime import datetime as _dt
+
     valor = row.get("data_criacao") or row.get("data") or row.get("timestamp") or ""
 
     if not valor:
-        return datetime.min
+        return _dt.min
 
     formatos = [
         "%d/%m/%Y %H:%M:%S",
@@ -172,11 +167,12 @@ def parse_data_pedido(row: dict):
 
     for fmt in formatos:
         try:
-            return datetime.strptime(str(valor), fmt)
+            return _dt.strptime(str(valor), fmt)
         except Exception:
             pass
 
-    return datetime.min
+    return _dt.min
+
 
 # --------------------------------------------------------------------
 # Firebase: adicionar / listar / atualizar
@@ -218,28 +214,10 @@ def adicionar_novo_pedido(
         # salvar_pedido pode retornar dict ou string (id)
         if isinstance(resultado, dict):
             pedido_id = resultado.get("id")
-            foto_url_salva = resultado.get("foto_url")
         else:
             pedido_id = resultado
-            foto_url_salva = None
 
         st.success(f"✅ Pedido {pedido_id} adicionado com sucesso!")
-
-        # se tiver foto e URL vinda do backend, guarda no session_state para preview
-        if foto_url_salva:
-            if "fotos_pedidos" not in st.session_state:
-                st.session_state.fotos_pedidos = {}
-            st.session_state.fotos_pedidos[pedido_id] = {
-                "nome": foto_info["nome"] if foto_info else nome_foto,
-                "data_url": foto_url_salva,
-                "dimensoes": foto_info.get("dimensoes") if foto_info else (0, 0),
-            }
-        elif foto_info:
-            # se não veio URL (fallback local), pelo menos mantemos a data_url em memória
-            if "fotos_pedidos" not in st.session_state:
-                st.session_state.fotos_pedidos = {}
-            st.session_state.fotos_pedidos[pedido_id] = foto_info
-
         return True
     except Exception as e:
         st.error(f"❌ Erro ao adicionar pedido: {e}")
@@ -273,6 +251,7 @@ def atualizar_status_pedido(pedido_id, novo_status):
         st.error(f"❌ Erro ao atualizar status: {e}")
         return False
 
+
 # --------------------------------------------------------------------
 # Tela: Adicionar Pedido
 # --------------------------------------------------------------------
@@ -305,7 +284,7 @@ def mostrar_formulario_adicionar_pedido():
         if uploaded_file is not None:
             foto_info = processar_upload_foto(uploaded_file, "preview")
             if foto_info:
-                st.success(f"📸 Foto anexada com sucesso!")
+                st.success("📸 Foto anexada com sucesso!")
 
         submitted = st.form_submit_button("➕ Adicionar Pedido")
 
@@ -324,6 +303,7 @@ def mostrar_formulario_adicionar_pedido():
                 ):
                     time.sleep(1.5)
                     st.rerun()
+
 
 # --------------------------------------------------------------------
 # Tela: Visualizar Pedidos (Expanders)
@@ -350,10 +330,9 @@ def mostrar_lista_pedidos():
         st.info("📭 Nenhum pedido cadastrado no momento.")
         return
 
-    # Normalizar registros
     registros = df.to_dict(orient="records")
 
-    # 🧠 Ordenar do mais novo para o mais antigo
+    # Ordenar do mais novo para o mais antigo
     registros = sorted(registros, key=parse_data_pedido, reverse=True)
 
     st.markdown("### 📦 Pedidos cadastrados")
@@ -361,9 +340,6 @@ def mostrar_lista_pedidos():
 
     pedidos = []
     for row in registros:
-        # pega a URL da foto (se existir)
-        foto_url = row.get("foto_url", "")
-
         pedidos.append(
             {
                 "id": row.get("id", row.get("ID", "")) or row.get("id", ""),
@@ -375,14 +351,11 @@ def mostrar_lista_pedidos():
                 "os": row.get("ordem_servico", row.get("os", "")),
                 "observacoes": row.get("observacoes", ""),
                 "status": row.get("status", ""),
-                "foto_url": foto_url,
-                # considera que TEM foto se houver foto_url OU se o campo tem_foto estiver marcado
-                "tem_foto": bool(foto_url)
-                or str(row.get("tem_foto", "")).lower() in ("true", "sim", "yes", "1"),
+                "tem_foto": str(row.get("tem_foto", "")).lower() in ("true", "sim", "yes", "1"),
+                "foto_url": row.get("foto_url", ""),
             }
         )
 
-    # Expanders por pedido
     for pedido in pedidos:
         status_label = pedido["status"] or "Pendente"
         emoji_status = STATUS_EMOJIS.get(status_label, "⚪")
@@ -416,28 +389,11 @@ def mostrar_lista_pedidos():
                     unsafe_allow_html=True,
                 )
 
-            # Foto
-            if pedido["tem_foto"]:
-                # 1) tenta usar o que está em memória
-                if (
-                    "fotos_pedidos" in st.session_state
-                    and pedido["id"] in st.session_state.fotos_pedidos
-                ):
-                    foto_info = st.session_state.fotos_pedidos[pedido["id"]]
-                    try:
-                        st.image(
-                            foto_info["data_url"],
-                            use_container_width=True,
-                            caption=f"Foto: {foto_info.get('nome', 'Foto')}",
-                        )
-                    except Exception:
-                        pass
-                # 2) se não tiver em memória, usa a URL salva no banco
-                elif pedido["foto_url"]:
-                    try:
-                        st.image(pedido["foto_url"], use_container_width=True)
-                    except Exception:
-                        st.warning("Não foi possível carregar a imagem deste pedido.")
+            if pedido["tem_foto"] and pedido["foto_url"]:
+                try:
+                    st.image(pedido["foto_url"], use_container_width=True)
+                except Exception:
+                    st.warning("Não foi possível carregar a imagem deste pedido.")
 
     # Estatísticas gerais
     try:
@@ -487,15 +443,12 @@ def mostrar_formulario_autenticacao():
 def mostrar_formulario_atualizacao_status():
     import pandas as pd
 
-    # Form principal
     with st.container():
         st.subheader("Atualizar Status do Pedido")
 
-        # Carrega pedidos uma vez
         df = obter_todos_pedidos()
 
         with st.form("form_atualizacao_status"):
-            # 🔎 UM ÚNICO CAMPO – ID OU Nº DE SÉRIE
             valor_busca = st.text_input("🔎 ID ou Número de Série *")
 
             opcoes_status = [f"{STATUS_EMOJIS[s]} {s}" for s in STATUS_PEDIDO]
@@ -525,7 +478,6 @@ def mostrar_formulario_atualizacao_status():
                     return
 
                 registros = df.to_dict(orient="records")
-                # Ordenar do mais novo para o mais antigo (opcional, só por consistência)
                 registros = sorted(registros, key=parse_data_pedido, reverse=True)
 
                 valor_busca_norm = valor_busca.strip().lower()
@@ -535,7 +487,6 @@ def mostrar_formulario_atualizacao_status():
                     rid = str(row.get("id", "")).strip().lower()
                     rnum = str(row.get("numero_serie", "")).strip().lower()
 
-                    # compara exatamente com ID ou Nº de série
                     if valor_busca_norm == rid or valor_busca_norm == rnum:
                         pedido_encontrado = row
                         break
@@ -554,15 +505,12 @@ def mostrar_formulario_atualizacao_status():
                     time.sleep(1)
                     st.rerun()
 
-    # ----------------------------
-    # PRÉ-VISUALIZAÇÃO NA SIDEBAR
-    # ----------------------------
+    # Pré-visualização na sidebar
     st.sidebar.markdown("---")
     st.sidebar.subheader("📋 Pré-visualização dos Pedidos")
 
     df_sidebar = obter_todos_pedidos()
 
-    import pandas as pd
     if df_sidebar is None:
         st.sidebar.info("📭 Nenhum pedido encontrado.")
         return
@@ -582,7 +530,6 @@ def mostrar_formulario_atualizacao_status():
         return
 
     registros_sidebar = df_sidebar.to_dict(orient="records")
-    # ordenar do mais novo para o mais antigo
     registros_sidebar = sorted(registros_sidebar, key=parse_data_pedido, reverse=True)
 
     for p in registros_sidebar:
@@ -614,6 +561,8 @@ def mostrar_formulario_atualizacao_status():
                     st.image(p["foto_url"], use_container_width=True)
                 except Exception:
                     st.warning("Não foi possível carregar a imagem deste pedido.")
+
+
 # --------------------------------------------------------------------
 # Session state + main
 # --------------------------------------------------------------------
@@ -629,20 +578,13 @@ def main():
     inicializar_session_state()
 
     st.title("📦 Controle de Pedidos de Peças Usadas")
-    status = firebase_status()
-    st.caption(f"Backend: USE_FIREBASE={status['USE_FIREBASE']} | BUCKET={status['BUCKET_NAME']}")
 
-    # Info de debug do backend
-    try:
-        status = firebase_status()
-        if status.get("USE_FIREBASE"):
-            modo = "✅ Firebase ONLINE (dados persistem após reboot)"
-        else:
-            modo = "⚠️ Modo LOCAL (dados somem quando o app reinicia)"
-        bucket = status.get("BUCKET_NAME") or "não configurado"
-        st.caption(f"{modo} • Bucket: `{bucket}`")
-    except Exception:
-        st.caption("⚠️ Não foi possível ler o status do backend (verifique firebase_funcoes.py)")
+    # 🔍 Debug do backend (mostra se está usando Firebase ou local)
+    fb_info = firebase_status()
+    backend_nome = "Firebase" if fb_info.get("USE_FIREBASE") else "Local (arquivo)"
+    st.sidebar.markdown(f"**Backend:** {backend_nome}")
+    if fb_info.get("BUCKET_NAME"):
+        st.sidebar.caption(f"Bucket: {fb_info['BUCKET_NAME']}")
 
     menu = st.sidebar.selectbox(
         "📂 Menu",
@@ -657,9 +599,5 @@ def main():
         mostrar_pagina_atualizar_status()
 
 
-
-
-
-
-
-
+if __name__ == "__main__":
+    main()
