@@ -1,4 +1,4 @@
-# app.py - VERSÃO COM FIREBASE REAL
+# app.py - VERSÃO COM DEBUG DOS SECRETS
 import streamlit as st
 import time
 import uuid
@@ -10,7 +10,7 @@ import os
 import json
 
 # =============================================================================
-# CONFIGURAÇÕES GERAIS (MESMA INTERFACE)
+# CONFIGURAÇÕES GERAIS
 # =============================================================================
 SENHA_AUTORIZACAO = "admin123"
 
@@ -22,20 +22,64 @@ STATUS_EMOJIS = {
 }
 
 # =============================================================================
+# DEBUG DOS SECRETS
+# =============================================================================
+def debug_secrets():
+    """Função para debug dos secrets"""
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔧 Debug Secrets")
+    
+    try:
+        # Listar todas as chaves disponíveis
+        secrets_keys = list(st.secrets.keys())
+        st.sidebar.write("Chaves disponíveis:", secrets_keys)
+        
+        # Verificar credenciais específicas
+        if 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in st.secrets:
+            creds = st.secrets['GOOGLE_APPLICATION_CREDENTIALS_JSON']
+            st.sidebar.success("✅ GOOGLE_APPLICATION_CREDENTIALS_JSON encontrado")
+            st.sidebar.write("Tipo:", type(creds))
+            
+            if isinstance(creds, str):
+                try:
+                    creds_dict = json.loads(creds)
+                    st.sidebar.success("✅ JSON parseado com sucesso")
+                    st.sidebar.write("Project ID:", creds_dict.get('project_id', 'NÃO ENCONTRADO'))
+                except json.JSONDecodeError as e:
+                    st.sidebar.error(f"❌ Erro no JSON: {e}")
+        else:
+            st.sidebar.error("❌ GOOGLE_APPLICATION_CREDENTIALS_JSON não encontrado")
+            
+        if 'FIREBASE_BUCKET' in st.secrets:
+            st.sidebar.success(f"✅ FIREBASE_BUCKET: {st.secrets['FIREBASE_BUCKET']}")
+        else:
+            st.sidebar.error("❌ FIREBASE_BUCKET não encontrado")
+            
+    except Exception as e:
+        st.sidebar.error(f"Erro no debug: {e}")
+
+# =============================================================================
 # CONFIGURAÇÃO DO FIREBASE
 # =============================================================================
 def inicializar_firebase():
     """Inicializa Firebase com credenciais do Streamlit Secrets"""
     try:
+        st.sidebar.info("🔄 Tentando conectar ao Firebase...")
+        
         # Verificar se secrets existem
-        if ('GOOGLE_APPLICATION_CREDENTIALS_JSON' not in st.secrets or 
-            'FIREBASE_BUCKET' not in st.secrets):
-            st.error("❌ Credenciais do Firebase não encontradas nos Secrets")
+        if 'GOOGLE_APPLICATION_CREDENTIALS_JSON' not in st.secrets:
+            st.sidebar.error("❌ GOOGLE_APPLICATION_CREDENTIALS_JSON não encontrado nos Secrets")
+            return None, None, None
+            
+        if 'FIREBASE_BUCKET' not in st.secrets:
+            st.sidebar.error("❌ FIREBASE_BUCKET não encontrado nos Secrets")
             return None, None, None
 
         # Obter credenciais
         creds_json = st.secrets['GOOGLE_APPLICATION_CREDENTIALS_JSON']
         bucket_name = st.secrets['FIREBASE_BUCKET']
+        
+        st.sidebar.info("📝 Processando credenciais...")
         
         # Se for string, converter para dict
         if isinstance(creds_json, str):
@@ -43,22 +87,34 @@ def inicializar_firebase():
         else:
             creds_dict = creds_json
 
+        # Verificar campos obrigatórios
+        required_fields = ['project_id', 'private_key', 'client_email']
+        missing_fields = [field for field in required_fields if field not in creds_dict]
+        
+        if missing_fields:
+            st.sidebar.error(f"❌ Campos faltando: {missing_fields}")
+            return None, None, None
+
         # Importar e configurar Firebase
         from google.cloud import firestore, storage
         from google.oauth2 import service_account
 
+        st.sidebar.info("🔐 Criando credenciais...")
+        
         # Criar credenciais
         credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        
+        st.sidebar.info("🏢 Inicializando clientes...")
         
         # Inicializar clientes
         firestore_client = firestore.Client(credentials=credentials, project=creds_dict['project_id'])
         storage_client = storage.Client(credentials=credentials, project=creds_dict['project_id'])
         
-        st.success("✅ Firebase conectado com sucesso!")
+        st.sidebar.success("✅ Firebase conectado com sucesso!")
         return firestore_client, storage_client, bucket_name
         
     except Exception as e:
-        st.error(f"❌ Erro ao conectar com Firebase: {e}")
+        st.sidebar.error(f"❌ Erro ao conectar com Firebase: {str(e)}")
         return None, None, None
 
 # Inicializar Firebase uma vez
@@ -76,7 +132,7 @@ else:
 USE_FIREBASE = firestore_client is not None and storage_client is not None
 
 # =============================================================================
-# CONFIGURAÇÃO DA PÁGINA (MESMA INTERFACE)
+# CONFIGURAÇÃO DA PÁGINA
 # =============================================================================
 def configurar_pagina():
     st.set_page_config(
@@ -111,95 +167,7 @@ def configurar_pagina():
     st.markdown(css, unsafe_allow_html=True)
 
 # =============================================================================
-# FUNÇÕES UTILITÁRIAS (MESMA INTERFACE)
-# =============================================================================
-def processar_upload_foto(uploaded_file, pedido_id):
-    """Processa upload, converte e gera data_url para envio ao backend."""
-    if uploaded_file is None:
-        return None
-
-    try:
-        image = Image.open(uploaded_file)
-
-        # Normalizar modo da imagem
-        if image.mode in ("RGBA", "LA", "P"):
-            background = Image.new("RGB", image.size, (255, 255, 255))
-            if image.mode == "P":
-                image = image.convert("RGBA")
-            background.paste(image, mask=image.split()[-1] if image.mode == "RGBA" else None)
-            image = background
-        elif image.mode != "RGB":
-            image = image.convert("RGB")
-
-        # Reduzir tamanho
-        max_size = (800, 800)
-        image.thumbnail(max_size, Image.Resampling.LANCZOS)
-
-        buffered = io.BytesIO()
-        image.save(buffered, format="JPEG", quality=85)
-        img_bytes = buffered.getvalue()
-        img_b64 = base64.b64encode(img_bytes).decode()
-
-        foto_info = {
-            "nome": getattr(uploaded_file, "name", "foto.jpg"),
-            "tamanho": getattr(uploaded_file, "size", len(img_bytes)),
-            "tipo": getattr(uploaded_file, "type", "image/jpeg"),
-            "dimensoes": image.size,
-            "data_url": f"data:image/jpeg;base64,{img_b64}",
-            "pedido_id": pedido_id,
-            "timestamp": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-        }
-        return foto_info
-    except Exception as e:
-        st.error(f"Erro ao processar imagem: {e}")
-        return None
-
-def validar_formulario(tecnico, peca):
-    if not tecnico or not tecnico.strip():
-        st.error("⚠️ O campo Técnico é obrigatório!")
-        return False
-    if not peca or not peca.strip():
-        st.error("⚠️ O campo Peça é obrigatório!")
-        return False
-    return True
-
-def formatar_status(status):
-    if not status:
-        return "⚪ N/A"
-    status_limpo = str(status).replace(":", "").strip()
-    emoji = STATUS_EMOJIS.get(status_limpo, "⚪")
-    return f"{emoji} {status_limpo}"
-
-def obter_emoji_status(status):
-    if not status:
-        return "⚪"
-    status_limpo = str(status).replace(":", "").strip()
-    return STATUS_EMOJIS.get(status_limpo, "⚪")
-
-def parse_data_pedido(row: dict):
-    """Converte o campo de data para datetime para ordenar"""
-    from datetime import datetime as _dt
-
-    valor = row.get("data_criacao") or row.get("data") or row.get("timestamp") or ""
-
-    if not valor:
-        return _dt.min
-
-    formatos = [
-        "%d/%m/%Y %H:%M:%S",
-        "%d/%m/%Y",
-    ]
-
-    for fmt in formatos:
-        try:
-            return _dt.strptime(str(valor), fmt)
-        except Exception:
-            pass
-
-    return _dt.min
-
-# =============================================================================
-# FUNÇÕES DO FIREBASE (REAIS)
+# FUNÇÕES DO FIREBASE
 # =============================================================================
 def datetime_now_str():
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
@@ -304,7 +272,7 @@ def atualizar_status(pedido_id: str, novo_status: str):
             
             if doc.exists:
                 doc_ref.update({"status": novo_status})
-                st.success(f"✅ Status do pedido {pedido_id} atualizado para {formatar_status(novo_status)}")
+                st.success(f"✅ Status do pedido {pedido_id} atualizado para {novo_status}")
                 return True
             else:
                 st.error("❌ Pedido não encontrado no Firebase")
@@ -315,7 +283,7 @@ def atualizar_status(pedido_id: str, novo_status: str):
                 for pedido in st.session_state.pedidos:
                     if pedido.get("id") == pedido_id:
                         pedido["status"] = novo_status
-                        st.success(f"✅ Status do pedido {pedido_id} atualizado para {formatar_status(novo_status)}")
+                        st.success(f"✅ Status do pedido {pedido_id} atualizado para {novo_status}")
                         return True
             st.error("❌ Pedido não encontrado")
             return False
@@ -323,14 +291,6 @@ def atualizar_status(pedido_id: str, novo_status: str):
     except Exception as e:
         st.error(f"❌ Erro ao atualizar status: {e}")
         return False
-
-def firebase_status():
-    """Retorna status do Firebase"""
-    return {
-        "USE_FIREBASE": USE_FIREBASE,
-        "BUCKET_NAME": BUCKET_NAME if USE_FIREBASE else None,
-        "STATUS": "CONECTADO" if USE_FIREBASE else "DESCONECTADO"
-    }
 
 # =============================================================================
 # TELAS DO SISTEMA (MESMA INTERFACE)
@@ -362,16 +322,30 @@ def mostrar_formulario_adicionar_pedido():
 
         foto_info = None
         if uploaded_file is not None:
-            foto_info = processar_upload_foto(uploaded_file, "preview")
-            if foto_info:
+            # Processamento simplificado da foto
+            try:
+                image = Image.open(uploaded_file)
+                if image.mode != "RGB":
+                    image = image.convert("RGB")
+                
+                buffered = io.BytesIO()
+                image.save(buffered, format="JPEG", quality=85)
+                foto_bytes = buffered.getvalue()
+                
+                foto_info = {
+                    "nome": uploaded_file.name,
+                    "bytes": foto_bytes
+                }
                 st.success("📸 Foto anexada com sucesso!")
+            except Exception as e:
+                st.error(f"Erro ao processar imagem: {e}")
 
         submitted = st.form_submit_button("➕ Adicionar Pedido")
 
         if submitted:
             if validar_formulario(tecnico, peca):
-                uploaded_bytes = uploaded_file.getvalue() if uploaded_file is not None else None
-                nome_foto = foto_info.get("nome") if foto_info else None
+                uploaded_bytes = foto_info["bytes"] if foto_info else None
+                nome_foto = foto_info["nome"] if foto_info else None
                 
                 dados = {
                     "tecnico": tecnico,
@@ -422,14 +396,12 @@ def mostrar_lista_pedidos():
             with col2:
                 st.markdown(f"**Nº Série:** {pedido['numero_serie'] or '-'}")
                 st.markdown(f"**OS:** {pedido['ordem_servico'] or '-'}")
-                st.markdown(f"**Status:** {formatar_status(status_label)}")
+                st.markdown(f"**Status:** {emoji_status} {status_label}")
 
             if pedido["observacoes"]:
                 st.markdown("**Observações:**")
                 st.markdown(
-                    f"<div style='background: rgba(255,255,255,0.02); "
-                    f"padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);'>"
-                    f"{pedido['observacoes']}</div>",
+                    f"<div style='background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);'>{pedido['observacoes']}</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -439,26 +411,14 @@ def mostrar_lista_pedidos():
                 except Exception:
                     st.warning("Não foi possível carregar a imagem deste pedido.")
 
-    # Estatísticas gerais
-    try:
-        total_pedidos = len(pedidos)
-        pendentes = sum(1 for p in pedidos if "pend" in str(p["status"]).lower())
-        solicitados = sum(1 for p in pedidos if "solic" in str(p["status"]).lower())
-        entregues = sum(1 for p in pedidos if "entreg" in str(p["status"]).lower())
-
-        st.markdown("### 📊 Resumo dos pedidos")
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.metric("Total de Pedidos", total_pedidos)
-        with c2:
-            st.metric("🔴 Pendentes", pendentes)
-        with c3:
-            st.metric("🟡 Solicitados", solicitados)
-        with c4:
-            taxa = (entregues / total_pedidos * 100) if total_pedidos > 0 else 0
-            st.metric("🟢 Entregues", f"{entregues} ({taxa:.1f}%)")
-    except Exception as e:
-        st.error(f"Erro ao calcular estatísticas: {e}")
+def validar_formulario(tecnico, peca):
+    if not tecnico or not tecnico.strip():
+        st.error("⚠️ O campo Técnico é obrigatório!")
+        return False
+    if not peca or not peca.strip():
+        st.error("⚠️ O campo Peça é obrigatório!")
+        return False
+    return True
 
 def mostrar_pagina_atualizar_status():
     st.header("🔄 Atualizar Status do Pedido")
@@ -483,7 +443,7 @@ def mostrar_formulario_atualizacao_status():
         st.subheader("Atualizar Status do Pedido")
 
         with st.form("form_atualizacao_status"):
-            valor_busca = st.text_input("🔎 ID ou Número de Série *")
+            valor_busca = st.text_input("🔎 ID do Pedido *")
 
             opcoes_status = [f"{STATUS_EMOJIS[s]} {s}" for s in STATUS_PEDIDO]
             novo_status_formatado = st.selectbox("🔄 Novo Status", opcoes_status)
@@ -493,80 +453,15 @@ def mostrar_formulario_atualizacao_status():
 
             if submitted:
                 if not valor_busca.strip():
-                    st.warning("⚠️ Por favor, informe o ID ou o Número de Série.")
+                    st.warning("⚠️ Por favor, informe o ID do pedido.")
                     return
 
-                pedidos = listar_pedidos()
-                if not pedidos:
-                    st.error("Nenhum pedido encontrado para atualizar.")
-                    return
-
-                valor_busca_norm = valor_busca.strip().lower()
-
-                pedido_encontrado = None
-                for pedido in pedidos:
-                    rid = str(pedido.get("id", "")).strip().lower()
-                    rnum = str(pedido.get("numero_serie", "")).strip().lower()
-
-                    if valor_busca_norm == rid or valor_busca_norm == rnum:
-                        pedido_encontrado = pedido
-                        break
-
-                if not pedido_encontrado:
-                    st.error("❌ Nenhum pedido encontrado com esse ID ou Número de Série.")
-                    return
-
-                pedido_id_real = str(pedido_encontrado.get("id") or "")
-                if not pedido_id_real:
-                    st.error("❌ Pedido encontrado, mas sem ID válido.")
-                    return
-
-                if atualizar_status(pedido_id_real, novo_status):
+                if atualizar_status(valor_busca.strip(), novo_status):
                     time.sleep(1)
                     st.rerun()
 
-    # Pré-visualização na sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📋 Pré-visualização dos Pedidos")
-
-    pedidos_sidebar = listar_pedidos()
-
-    if not pedidos_sidebar:
-        st.sidebar.info("📭 Nenhum pedido encontrado.")
-        return
-
-    for p in pedidos_sidebar:
-        status = p.get("status", "Pendente")
-        emoji = STATUS_EMOJIS.get(status, "⚪")
-        pid = p.get("id", "")
-        tecnico = p.get("tecnico", "-")
-        numero_serie = p.get("numero_serie", "-")
-
-        label = f"{emoji} Pedido — Tecnico: {tecnico} — Nº de Serie: {numero_serie} — ID: {pid}"
-
-        with st.sidebar.expander(label, expanded=False):
-            st.write(f"**📅 Data:** {p.get('data_criacao', '-')}")
-            st.write(f"**👤 Técnico:** {tecnico}")
-            st.write(f"**🔧 Peça:** {p.get('peca', '-')}")
-            st.write(f"**💻 Modelo:** {p.get('modelo', '-')}")
-            st.write(f"**🔢 Nº Série:** {numero_serie}")
-            st.write(f"**📄 OS:** {p.get('ordem_servico', '-')}")
-            st.write(f"**🆔 ID:** {pid}")
-            st.write(f"**📌 Status:** {formatar_status(status)}")
-
-            obs = p.get("observacoes", "")
-            if obs:
-                st.write("**📝 Observações:**")
-                st.info(obs)
-
-            if p.get("tem_foto") and p.get("foto_url"):
-                try:
-                    st.image(p["foto_url"], use_container_width=True)
-                except Exception:
-                    st.warning("Não foi possível carregar a imagem deste pedido.")
-
 # =============================================================================
-# MAIN (MESMA INTERFACE)
+# MAIN
 # =============================================================================
 def inicializar_session_state():
     if "autorizado" not in st.session_state:
@@ -580,12 +475,15 @@ def main():
 
     st.title("📦 Controle de Pedidos de Peças Usadas")
 
+    # Debug dos secrets
+    debug_secrets()
+
     # Status do backend
-    fb_info = firebase_status()
-    backend_nome = "Firebase" if fb_info.get("USE_FIREBASE") else "Local (Session State)"
-    st.sidebar.markdown(f"**Backend:** {backend_nome}")
-    if fb_info.get("BUCKET_NAME"):
-        st.sidebar.markdown(f"**Bucket:** {fb_info['BUCKET_NAME']}")
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔧 Status do Sistema")
+    st.sidebar.write(f"**Firebase:** {'✅ CONECTADO' if USE_FIREBASE else '❌ DESCONECTADO'}")
+    if USE_FIREBASE:
+        st.sidebar.write(f"**Bucket:** {BUCKET_NAME}")
 
     menu = st.sidebar.selectbox(
         "📂 Menu",
