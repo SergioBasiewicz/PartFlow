@@ -17,9 +17,6 @@ from firebase_funcoes import (
     atualizar_status,
     dataurl_para_bytes,
     firebase_status,
-    obter_estatisticas,
-    buscar_pedidos,
-    deletar_pedido
 )
 
 # --------------------------------------------------------------------
@@ -604,4 +601,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
