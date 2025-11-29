@@ -1,4 +1,4 @@
-# app.py - VERSÃO COM INTERFACE ORIGINAL
+# app.py - VERSÃO COM FIREBASE REAL
 import streamlit as st
 import time
 import uuid
@@ -7,9 +7,10 @@ from datetime import datetime
 from PIL import Image
 import io
 import os
+import json
 
 # =============================================================================
-# CONFIGURAÇÕES GERAIS (IGUAL AO ORIGINAL)
+# CONFIGURAÇÕES GERAIS (MESMA INTERFACE)
 # =============================================================================
 SENHA_AUTORIZACAO = "admin123"
 
@@ -21,7 +22,61 @@ STATUS_EMOJIS = {
 }
 
 # =============================================================================
-# CONFIGURAÇÃO DA PÁGINA (IGUAL AO ORIGINAL)
+# CONFIGURAÇÃO DO FIREBASE
+# =============================================================================
+def inicializar_firebase():
+    """Inicializa Firebase com credenciais do Streamlit Secrets"""
+    try:
+        # Verificar se secrets existem
+        if ('GOOGLE_APPLICATION_CREDENTIALS_JSON' not in st.secrets or 
+            'FIREBASE_BUCKET' not in st.secrets):
+            st.error("❌ Credenciais do Firebase não encontradas nos Secrets")
+            return None, None, None
+
+        # Obter credenciais
+        creds_json = st.secrets['GOOGLE_APPLICATION_CREDENTIALS_JSON']
+        bucket_name = st.secrets['FIREBASE_BUCKET']
+        
+        # Se for string, converter para dict
+        if isinstance(creds_json, str):
+            creds_dict = json.loads(creds_json)
+        else:
+            creds_dict = creds_json
+
+        # Importar e configurar Firebase
+        from google.cloud import firestore, storage
+        from google.oauth2 import service_account
+
+        # Criar credenciais
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        
+        # Inicializar clientes
+        firestore_client = firestore.Client(credentials=credentials, project=creds_dict['project_id'])
+        storage_client = storage.Client(credentials=credentials, project=creds_dict['project_id'])
+        
+        st.success("✅ Firebase conectado com sucesso!")
+        return firestore_client, storage_client, bucket_name
+        
+    except Exception as e:
+        st.error(f"❌ Erro ao conectar com Firebase: {e}")
+        return None, None, None
+
+# Inicializar Firebase uma vez
+if 'firebase_inicializado' not in st.session_state:
+    firestore_client, storage_client, BUCKET_NAME = inicializar_firebase()
+    st.session_state.firestore_client = firestore_client
+    st.session_state.storage_client = storage_client
+    st.session_state.bucket_name = BUCKET_NAME
+    st.session_state.firebase_inicializado = True
+else:
+    firestore_client = st.session_state.firestore_client
+    storage_client = st.session_state.storage_client
+    BUCKET_NAME = st.session_state.bucket_name
+
+USE_FIREBASE = firestore_client is not None and storage_client is not None
+
+# =============================================================================
+# CONFIGURAÇÃO DA PÁGINA (MESMA INTERFACE)
 # =============================================================================
 def configurar_pagina():
     st.set_page_config(
@@ -56,7 +111,7 @@ def configurar_pagina():
     st.markdown(css, unsafe_allow_html=True)
 
 # =============================================================================
-# FUNÇÕES UTILITÁRIAS (IGUAL AO ORIGINAL)
+# FUNÇÕES UTILITÁRIAS (MESMA INTERFACE)
 # =============================================================================
 def processar_upload_foto(uploaded_file, pedido_id):
     """Processa upload, converte e gera data_url para envio ao backend."""
@@ -144,7 +199,7 @@ def parse_data_pedido(row: dict):
     return _dt.min
 
 # =============================================================================
-# FUNÇÕES DO SISTEMA (SIMULANDO FIREBASE)
+# FUNÇÕES DO FIREBASE (REAIS)
 # =============================================================================
 def datetime_now_str():
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
@@ -157,66 +212,128 @@ def dataurl_para_bytes(data_url: str):
     except Exception:
         return None
 
-def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
-    """Salva pedido na session state (simulando Firebase)"""
+def upload_foto_firebase(bytes_data: bytes, nome_arquivo: str):
+    """Faz upload da foto para Firebase Storage"""
+    if not USE_FIREBASE or not storage_client:
+        return None
+        
     try:
-        pedido_id = str(uuid.uuid4())[:8]
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob_name = f"fotos_pedidos/{uuid.uuid4().hex}_{nome_arquivo}"
+        blob = bucket.blob(blob_name)
+        
+        blob.upload_from_string(bytes_data, content_type='image/jpeg')
+        blob.make_public()
+        
+        return blob.public_url
+    except Exception as e:
+        st.error(f"❌ Erro ao fazer upload da foto: {e}")
+        return None
+
+def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
+    """Salva pedido no Firestore"""
+    try:
+        pedido_id = str(uuid.uuid4())
+        foto_url = None
+        
+        # Upload da foto se existir
+        if foto_bytes and nome_foto:
+            foto_url = upload_foto_firebase(foto_bytes, nome_foto)
         
         # Preparar dados completos
         pedido_completo = {
             **dados,
             "id": pedido_id,
             "data_criacao": datetime_now_str(),
-            "foto_url": None,
-            "tem_foto": foto_bytes is not None
+            "foto_url": foto_url,
+            "tem_foto": foto_url is not None
         }
         
-        # Adicionar à session state
-        if 'pedidos' not in st.session_state:
-            st.session_state.pedidos = []
+        # Salvar no Firebase
+        if USE_FIREBASE:
+            doc_ref = firestore_client.collection("pedidos").document(pedido_id)
+            doc_ref.set(pedido_completo)
+            st.success(f"✅ Pedido {pedido_id} salvo no Firebase!")
+            return pedido_id
+        else:
+            # Fallback para session state
+            if 'pedidos' not in st.session_state:
+                st.session_state.pedidos = []
+            st.session_state.pedidos.append(pedido_completo)
+            st.success(f"✅ Pedido {pedido_id} salvo localmente!")
+            return pedido_id
             
-        st.session_state.pedidos.append(pedido_completo)
-        
-        st.success(f"✅ Pedido {pedido_id} adicionado com sucesso!")
-        return pedido_id
-        
     except Exception as e:
-        st.error(f"❌ Erro ao adicionar pedido: {e}")
-        return str(uuid.uuid4())[:8]
+        st.error(f"❌ Erro ao salvar pedido: {e}")
+        return None
 
 def listar_pedidos():
-    """Retorna lista de pedidos da session state"""
-    if 'pedidos' not in st.session_state:
+    """Busca pedidos do Firestore"""
+    try:
+        if USE_FIREBASE:
+            from google.cloud.firestore import Query
+            
+            # Buscar todos os pedidos ordenados por data
+            docs = firestore_client.collection("pedidos").order_by(
+                "data_criacao", direction=Query.DESCENDING
+            ).stream()
+            
+            pedidos = []
+            for doc in docs:
+                pedido_data = doc.to_dict()
+                pedido_data["id"] = doc.id
+                pedidos.append(pedido_data)
+            
+            return pedidos
+        else:
+            # Fallback para session state
+            if 'pedidos' not in st.session_state:
+                return []
+            return st.session_state.pedidos
+            
+    except Exception as e:
+        st.error(f"❌ Erro ao buscar pedidos: {e}")
         return []
-    
-    # Ordenar do mais novo para o mais antigo
-    pedidos = sorted(st.session_state.pedidos, key=parse_data_pedido, reverse=True)
-    return pedidos
 
 def atualizar_status(pedido_id: str, novo_status: str):
-    """Atualiza status de um pedido"""
-    if 'pedidos' not in st.session_state:
+    """Atualiza status no Firestore"""
+    try:
+        if USE_FIREBASE:
+            doc_ref = firestore_client.collection("pedidos").document(pedido_id)
+            doc = doc_ref.get()
+            
+            if doc.exists:
+                doc_ref.update({"status": novo_status})
+                st.success(f"✅ Status do pedido {pedido_id} atualizado para {formatar_status(novo_status)}")
+                return True
+            else:
+                st.error("❌ Pedido não encontrado no Firebase")
+                return False
+        else:
+            # Fallback para session state
+            if 'pedidos' in st.session_state:
+                for pedido in st.session_state.pedidos:
+                    if pedido.get("id") == pedido_id:
+                        pedido["status"] = novo_status
+                        st.success(f"✅ Status do pedido {pedido_id} atualizado para {formatar_status(novo_status)}")
+                        return True
+            st.error("❌ Pedido não encontrado")
+            return False
+            
+    except Exception as e:
+        st.error(f"❌ Erro ao atualizar status: {e}")
         return False
-        
-    for pedido in st.session_state.pedidos:
-        if pedido.get("id") == pedido_id:
-            pedido["status"] = novo_status
-            st.success(f"✅ Status do pedido {pedido_id} atualizado para {formatar_status(novo_status)}")
-            return True
-    
-    st.error("❌ Pedido não encontrado")
-    return False
 
 def firebase_status():
-    """Retorna status do sistema"""
+    """Retorna status do Firebase"""
     return {
-        "USE_FIREBASE": False,
-        "BUCKET_NAME": None,
-        "MODO": "SESSION STATE"
+        "USE_FIREBASE": USE_FIREBASE,
+        "BUCKET_NAME": BUCKET_NAME if USE_FIREBASE else None,
+        "STATUS": "CONECTADO" if USE_FIREBASE else "DESCONECTADO"
     }
 
 # =============================================================================
-# TELAS DO SISTEMA (IGUAL AO ORIGINAL)
+# TELAS DO SISTEMA (MESMA INTERFACE)
 # =============================================================================
 def mostrar_formulario_adicionar_pedido():
     st.header("📝 Adicionar Novo Pedido")
@@ -316,8 +433,11 @@ def mostrar_lista_pedidos():
                     unsafe_allow_html=True,
                 )
 
-            if pedido.get("tem_foto"):
-                st.info("📸 Foto anexada (em modo simulação)")
+            if pedido.get("tem_foto") and pedido.get("foto_url"):
+                try:
+                    st.image(pedido["foto_url"], use_container_width=True)
+                except Exception:
+                    st.warning("Não foi possível carregar a imagem deste pedido.")
 
     # Estatísticas gerais
     try:
@@ -439,11 +559,14 @@ def mostrar_formulario_atualizacao_status():
                 st.write("**📝 Observações:**")
                 st.info(obs)
 
-            if p.get("tem_foto"):
-                st.info("📸 Foto anexada")
+            if p.get("tem_foto") and p.get("foto_url"):
+                try:
+                    st.image(p["foto_url"], use_container_width=True)
+                except Exception:
+                    st.warning("Não foi possível carregar a imagem deste pedido.")
 
 # =============================================================================
-# MAIN (IGUAL AO ORIGINAL)
+# MAIN (MESMA INTERFACE)
 # =============================================================================
 def inicializar_session_state():
     if "autorizado" not in st.session_state:
@@ -461,6 +584,8 @@ def main():
     fb_info = firebase_status()
     backend_nome = "Firebase" if fb_info.get("USE_FIREBASE") else "Local (Session State)"
     st.sidebar.markdown(f"**Backend:** {backend_nome}")
+    if fb_info.get("BUCKET_NAME"):
+        st.sidebar.markdown(f"**Bucket:** {fb_info['BUCKET_NAME']}")
 
     menu = st.sidebar.selectbox(
         "📂 Menu",
