@@ -300,13 +300,12 @@ def mostrar_sidebar_pedidos():
             st.write(f"**🔢 Nº Série:** {numero_serie}")
             st.write(f"**📄 OS:** {pedido.get('ordem_servico', '-')}")
             st.write(f"**📌 Status:** {emoji_status} {status_label}")
-            st.write(f"**📅 Data:** {pedido.get('data_criacao', '-')}")
-            
-            st.success(f"**🆔 ID PARA COPIAR:** `{pedido['id']}`")
-            
+            st.write(f"**📅 Data:** {pedido.get('data_criacao', '-')}")       
             # Observações (se houver)
             if pedido.get("observacoes"):
                 st.write(f"**📝 Observações:** {pedido['observacoes']}")
+
+            st.success(f"**🆔 ID PARA COPIAR:** `{pedido['id']}`")
             
             # Foto (se houver) - em expander separado para não ocupar muito espaço
             if pedido.get("tem_foto") and pedido.get("foto_url"):
