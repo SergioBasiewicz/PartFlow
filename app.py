@@ -303,7 +303,7 @@ def mostrar_sidebar_pedidos():
             st.write(f"**📅 Data:** {pedido.get('data_criacao', '-')}")
             
             # ID para copiar - bem destacado
-            st.markdown("---")
+            st.markdown("")
             st.success(f"**🆔 ID PARA COPIAR:** `{pedido['id']}`")
             
             # Observações (se houver)
