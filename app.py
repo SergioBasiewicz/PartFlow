@@ -298,7 +298,7 @@ def mostrar_sidebar_pedidos():
 
         with st.sidebar.expander(titulo_expander, expanded=False):
             # Informações essenciais em colunas
-            col1, col2 = st.columns(2)
+            col1, col2 = st.columns(1)
             
             with col1:
                 st.write(f"**👤 Técnico:**")
