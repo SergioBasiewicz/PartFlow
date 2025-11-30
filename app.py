@@ -282,7 +282,6 @@ def mostrar_sidebar_pedidos():
     """Sidebar APENAS para Atualizar Status - CONTEÚDO VISÍVEL"""
     st.sidebar.markdown("---")
     st.sidebar.subheader("📋 Lista de Pedidos")
-    st.sidebar.info("💡 **Copie o ID (8 caracteres) para atualizar**")
 
     pedidos_sidebar = listar_pedidos()
 
@@ -471,7 +470,6 @@ def mostrar_formulario_autenticacao():
 def mostrar_formulario_atualizacao_status():
     with st.container():
         st.subheader("Atualizar Status do Pedido")
-        st.info("💡 **Use a sidebar para encontrar o ID do pedido (8 caracteres)**")
 
         pedidos = listar_pedidos()
 
