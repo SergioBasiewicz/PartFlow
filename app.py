@@ -1,4 +1,4 @@
-# app.py - VERSÃO COM EMAIL DO COLABORADOR NO FORMULÁRIO
+# app.py - VERSÃO COM NOTIFICAÇÃO POR EMAIL (CORRIGIDA)
 import streamlit as st
 import time
 import uuid
@@ -22,10 +22,10 @@ STATUS_EMOJIS = {
 }
 
 # =============================================================================
-# CONFIGURAÇÃO DE EMAIL (EMAIL FIXO PARA RECEBER PEDIDOS)
+# CONFIGURAÇÃO DE EMAIL (CORRIGIDA)
 # =============================================================================
 def enviar_email_notificacao(pedido_data):
-    """Envia email de notificação para o email fixo da empresa"""
+    """Envia email de notificação quando um novo pedido é criado"""
     try:
         # Verificar se as configurações de email existem
         if 'EMAIL' not in st.secrets:
@@ -37,82 +37,48 @@ def enviar_email_notificacao(pedido_data):
         smtp_port = st.secrets["EMAIL"]["SMTP_PORT"]
         email_from = st.secrets["EMAIL"]["EMAIL_FROM"]
         email_password = st.secrets["EMAIL"]["EMAIL_PASSWORD"]
+        email_to = st.secrets["EMAIL"]["EMAIL_TO"]
         
-        # 🔥 EMAIL FIXO QUE VAI RECEBER TODOS OS PEDIDOS
-        email_destino_fixo = st.secrets["EMAIL"]["EMAIL_TO"]  # Email da empresa
-        
-        # Corpo do email
+        # Corpo do email em texto simples (evita problemas com HTML)
         subject = f"📦 NOVO PEDIDO CRIADO - ID: {pedido_data['id']}"
         
-        # Email mais completo com informações do colaborador
         body = f"""
-        📦 NOVO PEDIDO DE PEÇA CRIADO
+        📦 NOVO PEDIDO CRIADO
         
-        =================================
-        INFORMAÇÕES DO PEDIDO:
-        =================================
+        Informações do Pedido:
+        --------------------
+        🆔 ID do Pedido: {pedido_data['id']}
+        👤 Técnico: {pedido_data['tecnico']}
+        🔧 Peça: {pedido_data['peca']}
+        💻 Modelo: {pedido_data.get('modelo', 'Não informado')}
+        🔢 Nº Série: {pedido_data.get('numero_serie', 'Não informado')}
+        📄 OS: {pedido_data.get('ordem_servico', 'Não informada')}
+        📌 Status: 🔴 {pedido_data.get('status', 'Pendente')}
+        📅 Data: {pedido_data.get('data_criacao', 'Não informada')}
         
-        🆔 **ID do Pedido:** {pedido_data['id']}
-        📅 **Data/Hora:** {pedido_data.get('data_criacao', 'Não informada')}
-        
-        =================================
-        DADOS DO COLABORADOR:
-        =================================
-        
-        👤 **Técnico/Solicitante:** {pedido_data['tecnico']}
-        📧 **Email do Colaborador:** {pedido_data.get('email_colaborador', 'Não informado')}
-        
-        =================================
-        DETALHES DA PEÇA SOLICITADA:
-        =================================
-        
-        🔧 **Peça Solicitada:** {pedido_data['peca']}
-        💻 **Modelo do Equipamento:** {pedido_data.get('modelo', 'Não informado')}
-        🔢 **Número de Série:** {pedido_data.get('numero_serie', 'Não informado')}
-        📄 **Ordem de Serviço (OS):** {pedido_data.get('ordem_servico', 'Não informada')}
-        📌 **Status:** 🔴 {pedido_data.get('status', 'Pendente')}
-        
-        =================================
-        OBSERVAÇÕES:
-        =================================
-        
-        {f"📝 {pedido_data.get('observacoes', 'Nenhuma observação')}" if pedido_data.get('observacoes') else "📝 Nenhuma observação"}
-        
-        =================================
-        AÇÕES NECESSÁRIAS:
-        =================================
-        
-        1. Verificar disponibilidade da peça
-        2. Atualizar status no sistema
-        3. Notificar o colaborador sobre o andamento
-        
-        ---
-        📧 **Email para contato:** {pedido_data.get('email_colaborador', 'Não informado')}
-        🔗 **Acesse o sistema:** [Sistema de Controle de Pedidos]
+        {f"📝 Observações: {pedido_data.get('observacoes', 'Nenhuma observação')}" if pedido_data.get('observacoes') else "📝 Observações: Nenhuma observação"}
         
         ---
         Este é um email automático do Sistema de Controle de Pedidos.
-        Email enviado em: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}
         """
         
-        # Usar smtplib nativo
+        # Usar smtplib nativo (mais compatível)
         import smtplib
         from email.message import EmailMessage
         
         # Criar mensagem
         msg = EmailMessage()
         msg['From'] = email_from
-        msg['To'] = email_destino_fixo
+        msg['To'] = email_to
         msg['Subject'] = subject
         msg.set_content(body)
         
         # Enviar email
         with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
+            server.starttls()  # Segurança
             server.login(email_from, email_password)
             server.send_message(msg)
             
-        st.success(f"📧 Notificação enviada para {email_destino_fixo}")
         return True
         
     except Exception as e:
@@ -245,24 +211,13 @@ def processar_upload_foto(uploaded_file, pedido_id):
         st.error(f"Erro ao processar imagem: {e}")
         return None
 
-def validar_formulario(tecnico, peca, email_colaborador):
+def validar_formulario(tecnico, peca):
     if not tecnico or not tecnico.strip():
         st.error("⚠️ O campo Técnico é obrigatório!")
         return False
     if not peca or not peca.strip():
         st.error("⚠️ O campo Peça é obrigatório!")
         return False
-    if not email_colaborador or not email_colaborador.strip():
-        st.error("⚠️ O campo Email é obrigatório!")
-        return False
-    
-    # Validar formato do email
-    import re
-    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    if not re.match(email_regex, email_colaborador):
-        st.error("⚠️ Por favor, insira um email válido!")
-        return False
-    
     return True
 
 def formatar_status(status):
@@ -330,11 +285,14 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
         
         st.success(f"✅ Pedido {pedido_id} salvo com sucesso!")
         
-        # 🔥 ENVIAR EMAIL DE NOTIFICAÇÃO PARA O EMAIL FIXO
+        # 🔥 ENVIAR EMAIL DE NOTIFICAÇÃO (OPCIONAL)
         try:
             if 'EMAIL' in st.secrets:
-                with st.spinner("📧 Enviando notificação..."):
-                    enviar_email_notificacao(pedido_completo)
+                with st.spinner("📧 Enviando notificação por email..."):
+                    if enviar_email_notificacao(pedido_completo):
+                        st.success("📧 Notificação enviada com sucesso!")
+                    else:
+                        st.warning("⚠️ Pedido salvo, mas não foi possível enviar o email.")
             else:
                 st.info("ℹ️ Notificação por email não configurada")
         except Exception as email_error:
@@ -415,7 +373,6 @@ def mostrar_sidebar_pedidos():
             
             # Informações básicas
             st.write(f"**👤 Técnico:** {tecnico}")
-            st.write(f"**📧 Email:** {pedido.get('email_colaborador', 'Não informado')}")
             st.write(f"**🔧 Peça:** {pedido['peca'] or '-'}")
             st.write(f"**💻 Modelo:** {pedido.get('modelo', '-')}")
             st.write(f"**🔢 Nº Série:** {numero_serie}")
@@ -444,16 +401,14 @@ def mostrar_formulario_adicionar_pedido():
         col1, col2 = st.columns(2)
 
         with col1:
-            tecnico = st.text_input("👤 Nome do Técnico *", help="Seu nome completo")
-            # 🔥 NOVO CAMPO: EMAIL DO COLABORADOR
-            email_colaborador = st.text_input("📧 Seu Email *", help="Seu email para contato")
-            peca = st.text_input("🔧 Peça Solicitada *", help="Descrição da peça necessária")
+            tecnico = st.text_input("👤 Técnico *", help="Nome do técnico responsável")
+            peca = st.text_input("🔧 Peça *", help="Descrição da peça necessária")
             modelo_equipamento = st.text_input("💻 Modelo do Equipamento", help="Modelo do equipamento")
 
         with col2:
             numero_serie = st.text_input("🔢 Número de Série", help="Número de série do equipamento")
-            ordem_servico = st.text_input("📄 Número da OS", help="Número da ordem de serviço")
-            observacoes = st.text_area("📝 Observações Adicionais", help="Detalhes importantes sobre a solicitação")
+            ordem_servico = st.text_input("📄 OS", help="Número da ordem de serviço")
+            observacoes = st.text_area("📝 Observações", help="Observações adicionais")
 
         st.markdown("---")
         st.subheader("📸 Anexar Foto (Opcional)")
@@ -470,21 +425,15 @@ def mostrar_formulario_adicionar_pedido():
             if foto_info:
                 st.success("📸 Foto processada com sucesso!")
 
-        # Informação sobre o email
-        if 'EMAIL' in st.secrets:
-            email_destino = st.secrets["EMAIL"]["EMAIL_TO"]
-            st.info(f"📨 **Este pedido será enviado para:** `{email_destino}`")
-
-        submitted = st.form_submit_button("➕ Criar Pedido")
+        submitted = st.form_submit_button("➕ Adicionar Pedido")
 
         if submitted:
-            if validar_formulario(tecnico, peca, email_colaborador):
+            if validar_formulario(tecnico, peca):
                 uploaded_bytes = foto_info["bytes"] if foto_info else None
                 nome_foto = foto_info["nome"] if foto_info else None
                 
                 dados = {
                     "tecnico": tecnico,
-                    "email_colaborador": email_colaborador,  # 🔥 NOVO CAMPO
                     "peca": peca,
                     "modelo": modelo_equipamento or "",
                     "numero_serie": numero_serie or "",
@@ -514,7 +463,7 @@ def mostrar_lista_pedidos():
         status_label = pedido.get("status") or "Pendente"
         emoji_status = STATUS_EMOJIS.get(status_label, "⚪")
         titulo = (
-            f"{emoji_status} Pedido — Técnico: {pedido['tecnico'] or '-'} "
+            f"{emoji_status} Pedido — Tecnico: {pedido['tecnico'] or '-'} "
             f"— Nº de Série: {pedido['numero_serie'] or '-'} — Id: {pedido['id']}"
         )
 
@@ -525,7 +474,6 @@ def mostrar_lista_pedidos():
 
             with col1:
                 st.markdown(f"**Técnico:** {pedido['tecnico'] or '-'}")
-                st.markdown(f"**📧 Email:** {pedido.get('email_colaborador', 'Não informado')}")
                 st.markdown(f"**Peça:** {pedido['peca'] or '-'}")
                 st.markdown(f"**Modelo:** {pedido['modelo'] or '-'}")
                 st.markdown(f"**ID:** {pedido['id'] or '-'}")
@@ -647,7 +595,6 @@ def mostrar_formulario_atualizacao_status():
                         col1, col2 = st.columns(2)
                         with col1:
                             st.write(f"**👤 Técnico:** {pedido_encontrado.get('tecnico', '-')}")
-                            st.write(f"**📧 Email:** {pedido_encontrado.get('email_colaborador', '-')}")
                             st.write(f"**🔧 Peça:** {pedido_encontrado.get('peca', '-')}")
                             st.write(f"**💻 Modelo:** {pedido_encontrado.get('modelo', '-')}")
                         with col2:
