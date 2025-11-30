@@ -306,7 +306,7 @@ def mostrar_sidebar_pedidos():
             
             # Observações (se houver)
             if pedido.get("observacoes"):
-                st.markdown("**📝 Observações:**")
+                st.markdown("**📝 **"pedido["observacoes"])
                 st.info(pedido["observacoes"])
             
             # Foto (se houver) - em expander separado para não ocupar muito espaço
