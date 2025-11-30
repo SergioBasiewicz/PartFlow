@@ -305,7 +305,7 @@ def mostrar_sidebar_pedidos():
             if pedido.get("observacoes"):
                 st.write(f"**📝 Observações:** {pedido['observacoes']}")
 
-            st.write(f"**🆔 ID PARA COPIAR:** `{pedido['id']}`")
+            st.write(f"**🆔 ID PARA COPIAR:** {pedido['id']}")
             
             # Foto (se houver) - em expander separado para não ocupar muito espaço
             if pedido.get("tem_foto") and pedido.get("foto_url"):
