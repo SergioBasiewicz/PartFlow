@@ -493,11 +493,6 @@ def mostrar_formulario_atualizacao_status():
                     pedido_encontrado = pedido
                     break
 
-                if (pedido.get("os") and 
-                    valor_busca_clean in pedido["os"].lower()):
-                    pedido_encontrado = pedido
-                    break
-
             if not pedido_encontrado:
                 st.error("❌ Nenhum pedido encontrado com os dados informados.")
                 return
