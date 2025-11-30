@@ -48,7 +48,6 @@ def inicializar_firebase():
         firestore_client = firestore.Client(credentials=credentials, project=creds_dict['project_id'])
         storage_client = storage.Client(credentials=credentials, project=creds_dict['project_id'])
         
-        st.success("✅ Firebase configurado com sucesso!")
         return firestore_client, storage_client, bucket_name
         
     except Exception as e:
@@ -220,7 +219,7 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
         doc_ref = firestore_client.collection("pedidos").document(pedido_id)
         doc_ref.set(pedido_completo)
         
-        st.success(f"✅ Pedido {pedido_id} salvo no Firebase!")
+        st.success(f"✅ Pedido {pedido_id} salvo com sucesso!")
         return pedido_id
             
     except Exception as e:
@@ -266,14 +265,6 @@ def atualizar_status(pedido_id: str, novo_status: str):
     except Exception as e:
         st.error(f"❌ Erro ao atualizar status: {e}")
         return False
-
-def firebase_status():
-    """Retorna status do Firebase para debug"""
-    return {
-        "USE_FIREBASE": True,
-        "BUCKET_NAME": BUCKET_NAME,
-        "PROJECT": "partflow-81c43"
-    }
 
 # =============================================================================
 # TELAS DO SISTEMA
@@ -327,6 +318,7 @@ def mostrar_sidebar_pedidos():
                         st.image(pedido["foto_url"], use_container_width=True)
                     except Exception:
                         st.warning("⚠️ Erro ao carregar foto")
+
 def mostrar_formulario_adicionar_pedido():
     st.header("📝 Adicionar Novo Pedido")
 
@@ -534,6 +526,7 @@ def mostrar_formulario_atualizacao_status():
 
     # 🔥 SIDEBAR
     mostrar_sidebar_pedidos()
+
 # =============================================================================
 # MAIN
 # =============================================================================
@@ -546,15 +539,7 @@ def main():
     inicializar_session_state()
 
     st.title("📦 Controle de Pedidos de Peças Usadas")
-    st.success("🚀 Conectado ao Firebase - Todos os dados salvos na nuvem!")
     
-    # Status do backend
-    fb_info = firebase_status()
-    st.sidebar.markdown(f"**Backend:** Firebase")
-    st.sidebar.markdown(f"**Projeto:** {fb_info.get('PROJECT')}")
-    st.sidebar.markdown(f"**Bucket:** {fb_info.get('BUCKET_NAME')}")
-    st.sidebar.success("✅ Sistema operacional")
-
     menu = st.sidebar.selectbox(
         "📂 Menu",
         ["Adicionar Pedido", "Visualizar Pedidos", "Atualizar Status"],
