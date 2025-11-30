@@ -278,34 +278,64 @@ def firebase_status():
 # TELAS DO SISTEMA
 # =============================================================================
 def mostrar_sidebar_pedidos():
-    """Sidebar APENAS para Atualizar Status"""
+    """Sidebar informativa e prática para Atualizar Status"""
     st.sidebar.markdown("---")
-    st.sidebar.subheader("📋 Lista de Pedidos (para referência)")
+    st.sidebar.subheader("📋 Lista Completa de Pedidos")
+    st.sidebar.info("🔍 **Encontre o pedido e copie o ID**")
 
     pedidos_sidebar = listar_pedidos()
 
     if not pedidos_sidebar:
-        st.sidebar.info("📭 Nenhum pedido encontrado.")
+        st.sidebar.info("📭 Nenhum pedido cadastrado")
         return
 
     for pedido in pedidos_sidebar:
         status_label = pedido.get("status") or "Pendente"
         emoji_status = STATUS_EMOJIS.get(status_label, "⚪")
-        titulo_expander = (
-            f"{emoji_status} {pedido['tecnico'] or '-'} - ID: {pedido['id']}"
-        )
+        
+        # Título claro e informativo
+        titulo_expander = f"{emoji_status} ID: {pedido['id']}"
 
         with st.sidebar.expander(titulo_expander, expanded=False):
-            st.write(f"**Peça:** {pedido['peca'] or '-'}")
-            st.write(f"**Modelo:** {pedido['modelo'] or '-'}")
-            st.write(f"**Nº Série:** {pedido['numero_serie'] or '-'}")
-            st.write(f"**Status:** {formatar_status(status_label)}")
-
+            # Informações essenciais em colunas
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write(f"**👤 Técnico:**")
+                st.write(f"{pedido['tecnico'] or '-'}")
+                st.write(f"**🔧 Peça:**")
+                st.write(f"{pedido['peca'] or '-'}")
+                st.write(f"**💻 Modelo:**")
+                st.write(f"{pedido.get('modelo', '-')}")
+            
+            with col2:
+                st.write(f"**🔢 Nº Série:**")
+                st.write(f"{pedido.get('numero_serie', '-')}")
+                st.write(f"**📄 OS:**")
+                st.write(f"{pedido.get('ordem_servico', '-')}")
+                st.write(f"**📌 Status:**")
+                st.write(f"{emoji_status} {status_label}")
+            
+            # Data e ID destacado
+            st.write(f"**📅 Data:** {pedido.get('data_criacao', '-')}")
+            
+            # ID para copiar - bem destacado
+            st.markdown("---")
+            st.success(f"**🆔 ID PARA COPIAR:** `{pedido['id']}`")
+            st.markdown("---")
+            
+            # Observações (se houver)
+            if pedido.get("observacoes"):
+                st.write("**📝 Observações:**")
+                st.info(pedido["observacoes"])
+            
+            # Foto (se houver)
             if pedido.get("tem_foto") and pedido.get("foto_url"):
                 try:
-                    st.image(pedido["foto_url"], use_container_width=True, caption="Foto")
+                    with st.expander("📸 Ver Foto", expanded=False):
+                        st.image(pedido["foto_url"], use_container_width=True)
                 except Exception:
-                    st.warning("⚠️ Imagem não carregada")
+                    st.warning("⚠️ Erro ao carregar foto")
 
 def mostrar_formulario_adicionar_pedido():
     st.header("📝 Adicionar Novo Pedido")
@@ -337,8 +367,6 @@ def mostrar_formulario_adicionar_pedido():
             foto_info = processar_upload_foto(uploaded_file, "preview")
             if foto_info:
                 st.success("📸 Foto processada com sucesso!")
-                # Mostrar pré-visualização
-                st.image(uploaded_file, use_container_width=True, caption="Pré-visualização da foto")
 
         submitted = st.form_submit_button("➕ Adicionar Pedido")
 
