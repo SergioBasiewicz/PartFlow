@@ -462,7 +462,7 @@ def mostrar_formulario_atualizacao_status():
         with st.form("form_atualizacao_status"):
             # 🔥 BUSCA FLEXÍVEL - ID OU NÚMERO DE SÉRIE
             valor_busca = st.text_input(
-                "🔎 ID (8 caracteres) OU Número de Série *", 
+                "🔎 ID OU Número de Série *", 
                 help="Digite o ID de 8 caracteres OU o número de série completo"
             )
 
