@@ -294,7 +294,7 @@ def mostrar_sidebar_pedidos():
         emoji_status = STATUS_EMOJIS.get(status_label, "⚪")
         
         # Título com ID de 8 caracteres
-        titulo_expander = f"{emoji_status} ID: {pedido['id']}"
+        titulo_expander = f" 👤 {tecnico} | 🔢 {numero_serie} | {emoji_status} ID: {pedido['id']}"
 
         with st.sidebar.expander(titulo_expander, expanded=False):
             # 🔥 CONTEÚDO DENTRO DO EXPANDER - AGORA VISÍVEL
