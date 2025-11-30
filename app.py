@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL CORRIGIDA
+# app.py - VERSÃO COM ID DE 8 CARACTERES
 import streamlit as st
 import time
 import uuid
@@ -197,9 +197,10 @@ def upload_foto_firebase(bytes_data: bytes, nome_arquivo: str):
         return None
 
 def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
-    """Salva pedido no Firestore com foto no Storage"""
+    """Salva pedido no Firestore com foto no Storage - ID de 8 caracteres"""
     try:
-        pedido_id = str(uuid.uuid4())
+        # 🔥 ID COM APENAS 8 CARACTERES
+        pedido_id = str(uuid.uuid4())[:8]
         foto_url = None
         
         # Upload da foto se existir
@@ -209,7 +210,7 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
         # Preparar dados completos
         pedido_completo = {
             **dados,
-            "id": pedido_id,
+            "id": pedido_id,  # ID de 8 caracteres
             "data_criacao": datetime_now_str(),
             "foto_url": foto_url,
             "tem_foto": foto_url is not None
@@ -278,27 +279,27 @@ def firebase_status():
 # TELAS DO SISTEMA
 # =============================================================================
 def mostrar_sidebar_pedidos():
-    """Sidebar informativa e prática para Atualizar Status"""
+    """Sidebar APENAS para Atualizar Status - COM ID DE 8 CARACTERES"""
     st.sidebar.markdown("---")
-    st.sidebar.subheader("📋 Lista Completa de Pedidos")
-    st.sidebar.info("🔍 **Encontre o pedido e copie o ID**")
+    st.sidebar.subheader("📋 Lista de Pedidos")
+    st.sidebar.info("💡 **Copie o ID (8 caracteres) para atualizar**")
 
     pedidos_sidebar = listar_pedidos()
 
     if not pedidos_sidebar:
-        st.sidebar.info("📭 Nenhum pedido cadastrado")
+        st.sidebar.info("📭 Nenhum pedido encontrado.")
         return
 
     for pedido in pedidos_sidebar:
         status_label = pedido.get("status") or "Pendente"
         emoji_status = STATUS_EMOJIS.get(status_label, "⚪")
         
-        # Título claro e informativo
+        # Título com ID de 8 caracteres
         titulo_expander = f"{emoji_status} ID: {pedido['id']}"
 
         with st.sidebar.expander(titulo_expander, expanded=False):
-            # Informações essenciais em colunas
-            col1, col2 = st.columns(1)
+            # Informações essenciais
+            col1, col2 = st.columns(2)
             
             with col1:
                 st.write(f"**👤 Técnico:**")
@@ -316,7 +317,7 @@ def mostrar_sidebar_pedidos():
                 st.write(f"**📌 Status:**")
                 st.write(f"{emoji_status} {status_label}")
             
-            # Data e ID destacado
+            # Data
             st.write(f"**📅 Data:** {pedido.get('data_criacao', '-')}")
             
             # ID para copiar - bem destacado
@@ -483,11 +484,12 @@ def mostrar_formulario_autenticacao():
 def mostrar_formulario_atualizacao_status():
     with st.container():
         st.subheader("Atualizar Status do Pedido")
+        st.info("💡 **Use a sidebar para encontrar o ID do pedido (8 caracteres)**")
 
         pedidos = listar_pedidos()
 
         with st.form("form_atualizacao_status"):
-            valor_busca = st.text_input("🔎 ID do Pedido *", help="Digite o ID exato do pedido (veja na sidebar)")
+            valor_busca = st.text_input("🔎 ID do Pedido (8 caracteres) *", help="Digite o ID exato de 8 caracteres do pedido")
 
             opcoes_status = [f"{STATUS_EMOJIS[s]} {s}" for s in STATUS_PEDIDO]
             novo_status_formatado = st.selectbox("🔄 Novo Status", opcoes_status)
@@ -523,7 +525,7 @@ def mostrar_formulario_atualizacao_status():
                     time.sleep(2)
                     st.rerun()
 
-    # 🔥 SIDEBAR APENAS AQUI - SEM PARÂMETRO
+    # 🔥 SIDEBAR APENAS AQUI - COM ID DE 8 CARACTERES
     mostrar_sidebar_pedidos()
 
 # =============================================================================
