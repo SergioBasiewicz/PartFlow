@@ -461,7 +461,7 @@ def mostrar_formulario_atualizacao_status():
 
         with st.form("form_atualizacao_status"):
             valor_busca = st.text_input(
-                "🔎 ID (8 caracteres) OU Número de Série *", 
+                "🔎 ID ou Número de Série ou OS *", 
                 help="Digite o ID de 8 caracteres OU o número de série completo"
             )
 
@@ -490,6 +490,11 @@ def mostrar_formulario_atualizacao_status():
                     break
                 if (pedido.get("numero_serie") and 
                     valor_busca_clean in pedido["numero_serie"].lower()):
+                    pedido_encontrado = pedido
+                    break
+
+                if (pedido.get("os") and 
+                    valor_busca_clean in pedido["os"].lower()):
                     pedido_encontrado = pedido
                     break
 
