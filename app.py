@@ -408,6 +408,8 @@ def mostrar_lista_pedidos():
 
             if pedido["observacoes"]:
                 st.markdown("**Observações:**")
+
+                
                 st.markdown(
                     f"<div style='background: rgba(255,255,255,0.02); "
                     f"padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);'>"
