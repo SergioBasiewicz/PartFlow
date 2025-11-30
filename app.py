@@ -279,7 +279,7 @@ def firebase_status():
 # TELAS DO SISTEMA
 # =============================================================================
 def mostrar_sidebar_pedidos():
-    """Sidebar com título compacto"""
+    """Sidebar APENAS para Atualizar Status - CONTEÚDO VISÍVEL"""
     st.sidebar.markdown("---")
     st.sidebar.subheader("📋 Lista de Pedidos")
     st.sidebar.info("💡 **Copie o ID (8 caracteres) para atualizar**")
@@ -294,18 +294,16 @@ def mostrar_sidebar_pedidos():
         status_label = pedido.get("status") or "Pendente"
         emoji_status = STATUS_EMOJIS.get(status_label, "⚪")
         
-        # 🔥 TÍTULO COMPACTO
+        # 🔥 TÍTULO MODIFICADO COM TÉCNICO E NÚMERO DE SÉRIE
         tecnico = pedido.get('tecnico', '-') or '-'
         numero_serie = pedido.get('numero_serie', '-') or '-'
         
-        # Versão compacta: apenas ID, técnico abreviado e últimos 4 dígitos do número de série
-        tecnico_abreviado = tecnico.split()[0] if tecnico != '-' else '-'
-        nserie_abreviado = numero_serie[-4:] if len(numero_serie) > 4 else numero_serie
-        
-        titulo_expander = f"{emoji_status} {pedido['id']} | {tecnico_abreviado} | {nserie_abreviado}"
+        titulo_expander = f"{emoji_status} ID: {pedido['id']} | 👤 {tecnico} | 🔢 {numero_serie}"
 
         with st.sidebar.expander(titulo_expander, expanded=False):
-            # Conteúdo completo dentro do expander
+            # 🔥 CONTEÚDO DENTRO DO EXPANDER - AGORA VISÍVEL
+            
+            # Informações básicas
             st.write(f"**👤 Técnico:** {tecnico}")
             st.write(f"**🔧 Peça:** {pedido['peca'] or '-'}")
             st.write(f"**💻 Modelo:** {pedido.get('modelo', '-')}")
@@ -314,13 +312,16 @@ def mostrar_sidebar_pedidos():
             st.write(f"**📌 Status:** {emoji_status} {status_label}")
             st.write(f"**📅 Data:** {pedido.get('data_criacao', '-')}")
             
+            # ID para copiar - bem destacado
             st.markdown("---")
             st.success(f"**🆔 ID PARA COPIAR:** `{pedido['id']}`")
             
+            # Observações (se houver)
             if pedido.get("observacoes"):
                 st.markdown("**📝 Observações:**")
                 st.info(pedido["observacoes"])
             
+            # Foto (se houver) - em expander separado para não ocupar muito espaço
             if pedido.get("tem_foto") and pedido.get("foto_url"):
                 with st.expander("📸 Ver Foto", expanded=False):
                     try:
