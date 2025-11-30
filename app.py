@@ -288,7 +288,7 @@ def mostrar_sidebar_pedidos():
         tecnico = pedido.get('tecnico', '-') or '-'
         numero_serie = pedido.get('numero_serie', '-') or '-'
         
-        titulo_expander =  f"{emoji_status} Pedido — Tecnico: {pedido['tecnico'] — Nº Série: {numero_serie} — ID: {pedido['id']}"
+        titulo_expander =  f" **Status:** {emoji_status} {status_label} — 👤 Técnico: {tecnico} — 🔢 Nº Série: {numero_serie} — 🆔 ID: {pedido['id']}"
 
         with st.sidebar.expander(titulo_expander, expanded=False):
             # 🔥 CONTEÚDO DENTRO DO EXPANDER - AGORA VISÍVEL
