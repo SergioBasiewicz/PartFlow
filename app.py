@@ -406,10 +406,7 @@ def mostrar_lista_pedidos():
                 st.markdown(f"**OS:** {pedido['ordem_servico'] or '-'}")
                 st.markdown(f"**Status:** {formatar_status(status_label)}")
 
-            if pedido["observacoes"]:
-                st.markdown("**Observações:**")
-
-                
+            if pedido["observacoes"]: st.markdown("**Observações:**")     
                 st.markdown(
                     f"<div style='background: rgba(255,255,255,0.02); "
                     f"padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);'>"
