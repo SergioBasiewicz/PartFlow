@@ -1,4 +1,4 @@
-# app.py - VERSÃO COM NOTIFICAÇÃO POR EMAIL
+# app.py - VERSÃO COM NOTIFICAÇÃO POR EMAIL (CORRIGIDA)
 import streamlit as st
 import time
 import uuid
@@ -8,9 +8,6 @@ from PIL import Image
 import io
 import os
 import json
-import smtplib
-from email.mime.text import MimeText
-from email.mime.multipart import MimeMultipart
 
 # =============================================================================
 # CONFIGURAÇÕES GERAIS
@@ -25,99 +22,56 @@ STATUS_EMOJIS = {
 }
 
 # =============================================================================
-# CONFIGURAÇÃO DE EMAIL
+# CONFIGURAÇÃO DE EMAIL (CORRIGIDA)
 # =============================================================================
 def enviar_email_notificacao(pedido_data):
     """Envia email de notificação quando um novo pedido é criado"""
     try:
-        # Configurações do email (adicionar no secrets.toml)
+        # Verificar se as configurações de email existem
+        if 'EMAIL' not in st.secrets:
+            st.warning("⚠️ Configurações de email não encontradas. Pulando envio de notificação.")
+            return False
+            
+        # Configurações do email
         smtp_server = st.secrets["EMAIL"]["SMTP_SERVER"]
         smtp_port = st.secrets["EMAIL"]["SMTP_PORT"]
         email_from = st.secrets["EMAIL"]["EMAIL_FROM"]
         email_password = st.secrets["EMAIL"]["EMAIL_PASSWORD"]
         email_to = st.secrets["EMAIL"]["EMAIL_TO"]
         
-        # Criar mensagem
+        # Corpo do email em texto simples (evita problemas com HTML)
         subject = f"📦 NOVO PEDIDO CRIADO - ID: {pedido_data['id']}"
         
-        # Corpo do email em HTML
         body = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
-            <div style="max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <h2 style="color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;">📦 Novo Pedido Criado</h2>
-                
-                <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                    <h3 style="color: #4CAF50; margin-top: 0;">Informações do Pedido:</h3>
-                    
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">🆔 ID do Pedido:</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd;"><code>{pedido_data['id']}</code></td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">👤 Técnico:</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data['tecnico']}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">🔧 Peça:</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data['peca']}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">💻 Modelo:</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data.get('modelo', 'Não informado')}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">🔢 Nº Série:</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data.get('numero_serie', 'Não informado')}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">📄 OS:</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data.get('ordem_servico', 'Não informada')}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">📌 Status:</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">
-                                <span style="color: #ff6b6b; font-weight: bold;">🔴 {pedido_data.get('status', 'Pendente')}</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">📅 Data:</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data.get('data_criacao', 'Não informada')}</td>
-                        </tr>
-                    </table>
-                </div>
-                
-                {f"""
-                <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #ffc107;">
-                    <h4 style="color: #856404; margin-top: 0;">📝 Observações:</h4>
-                    <p style="color: #856404; margin: 0;">{pedido_data.get('observacoes', 'Nenhuma observação')}</p>
-                </div>
-                """ if pedido_data.get('observacoes') else ""}
-                
-                <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 15px 0; text-align: center;">
-                    <p style="margin: 0; color: #0066cc;">
-                        <strong>Acesse o sistema para mais detalhes:</strong><br>
-                        <a href="#" style="color: #004499;">Sistema de Controle de Pedidos</a>
-                    </p>
-                </div>
-                
-                <footer style="text-align: center; margin-top: 20px; padding-top: 10px; border-top: 1px solid #ddd; color: #666;">
-                    <p>Este é um email automático do Sistema de Controle de Pedidos.</p>
-                </footer>
-            </div>
-        </body>
-        </html>
+        📦 NOVO PEDIDO CRIADO
+        
+        Informações do Pedido:
+        --------------------
+        🆔 ID do Pedido: {pedido_data['id']}
+        👤 Técnico: {pedido_data['tecnico']}
+        🔧 Peça: {pedido_data['peca']}
+        💻 Modelo: {pedido_data.get('modelo', 'Não informado')}
+        🔢 Nº Série: {pedido_data.get('numero_serie', 'Não informado')}
+        📄 OS: {pedido_data.get('ordem_servico', 'Não informada')}
+        📌 Status: 🔴 {pedido_data.get('status', 'Pendente')}
+        📅 Data: {pedido_data.get('data_criacao', 'Não informada')}
+        
+        {f"📝 Observações: {pedido_data.get('observacoes', 'Nenhuma observação')}" if pedido_data.get('observacoes') else "📝 Observações: Nenhuma observação"}
+        
+        ---
+        Este é um email automático do Sistema de Controle de Pedidos.
         """
         
+        # Usar smtplib nativo (mais compatível)
+        import smtplib
+        from email.message import EmailMessage
+        
         # Criar mensagem
-        msg = MimeMultipart()
+        msg = EmailMessage()
         msg['From'] = email_from
         msg['To'] = email_to
         msg['Subject'] = subject
-        
-        # Adicionar corpo HTML
-        msg.attach(MimeText(body, 'html'))
+        msg.set_content(body)
         
         # Enviar email
         with smtplib.SMTP(smtp_server, smtp_port) as server:
@@ -128,7 +82,7 @@ def enviar_email_notificacao(pedido_data):
         return True
         
     except Exception as e:
-        st.error(f"❌ Erro ao enviar email: {e}")
+        st.error(f"❌ Erro ao enviar email: {str(e)}")
         return False
 
 # =============================================================================
@@ -331,12 +285,18 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
         
         st.success(f"✅ Pedido {pedido_id} salvo com sucesso!")
         
-        # 🔥 ENVIAR EMAIL DE NOTIFICAÇÃO
-        with st.spinner("📧 Enviando notificação por email..."):
-            if enviar_email_notificacao(pedido_completo):
-                st.success("📧 Notificação enviada com sucesso!")
+        # 🔥 ENVIAR EMAIL DE NOTIFICAÇÃO (OPCIONAL)
+        try:
+            if 'EMAIL' in st.secrets:
+                with st.spinner("📧 Enviando notificação por email..."):
+                    if enviar_email_notificacao(pedido_completo):
+                        st.success("📧 Notificação enviada com sucesso!")
+                    else:
+                        st.warning("⚠️ Pedido salvo, mas não foi possível enviar o email.")
             else:
-                st.warning("⚠️ Pedido salvo, mas não foi possível enviar o email.")
+                st.info("ℹ️ Notificação por email não configurada")
+        except Exception as email_error:
+            st.warning(f"⚠️ Pedido salvo, mas erro no email: {email_error}")
         
         return pedido_id
             
