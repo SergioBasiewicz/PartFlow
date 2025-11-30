@@ -356,8 +356,6 @@ def mostrar_formulario_adicionar_pedido():
             foto_info = processar_upload_foto(uploaded_file, "preview")
             if foto_info:
                 st.success("📸 Foto processada com sucesso!")
-                # Mostrar pré-visualização
-                st.image(uploaded_file, use_container_width=True, caption="Pré-visualização da foto")
 
         submitted = st.form_submit_button("➕ Adicionar Pedido")
 
