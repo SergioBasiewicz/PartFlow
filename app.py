@@ -462,7 +462,7 @@ def mostrar_formulario_atualizacao_status():
         with st.form("form_atualizacao_status"):
             # 🔥 BUSCA FLEXÍVEL - ID OU NÚMERO DE SÉRIE
             valor_busca = st.text_input(
-                "🔎 ID ou Número de Série *", 
+                "🔎 ID (8 caracteres) OU Número de Série *", 
                 help="Digite o ID de 8 caracteres OU o número de série completo"
             )
 
@@ -472,15 +472,15 @@ def mostrar_formulario_atualizacao_status():
 
             submitted = st.form_submit_button("📥 Atualizar Status")
 
-            if submitted:
-                if not valor_busca.strip():
-                    st.warning("⚠️ Por favor, informe o ID ou Número de Série.")
-                    return
-
-                if not pedidos:
-                    st.error("Nenhum pedido encontrado para atualizar.")
-                    return
-
+        # 🔥 MOVER A LÓGICA DE PROCESSAMENTO PARA FORA DO FORMULÁRIO
+        if submitted:
+            if not valor_busca.strip():
+                st.warning("⚠️ Por favor, informe o ID ou Número de Série.")
+                
+            elif not pedidos:
+                st.error("Nenhum pedido encontrado para atualizar.")
+                
+            else:
                 pedido_encontrado = None
                 valor_busca_clean = valor_busca.strip().lower()
                 
@@ -499,21 +499,32 @@ def mostrar_formulario_atualizacao_status():
 
                 if not pedido_encontrado:
                     st.error("❌ Nenhum pedido encontrado com os dados informados.")
-                    return
-
-                pedido_id_real = pedido_encontrado.get("id")
-                if not pedido_id_real:
-                    st.error("❌ Pedido encontrado, mas sem ID válido.")
-                    return
-
-                # Mostrar confirmação
-                st.success(f"✅ Pedido encontrado: {pedido_encontrado.get('tecnico')} - {pedido_encontrado.get('peca')}")
-                st.write(f"**ID:** `{pedido_id_real}` | **Nº Série:** {pedido_encontrado.get('numero_serie', '-')}")
-                st.write(f"**Status atual:** {formatar_status(pedido_encontrado.get('status'))} → **Novo status:** {novo_status_formatado}")
-
-                if atualizar_status(pedido_id_real, novo_status):
-                    time.sleep(2)
-                    st.rerun()
+                    
+                else:
+                    pedido_id_real = pedido_encontrado.get("id")
+                    if not pedido_id_real:
+                        st.error("❌ Pedido encontrado, mas sem ID válido.")
+                        
+                    else:
+                        # Mostrar confirmação ANTES de atualizar
+                        st.success(f"✅ Pedido encontrado!")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write(f"**👤 Técnico:** {pedido_encontrado.get('tecnico', '-')}")
+                            st.write(f"**🔧 Peça:** {pedido_encontrado.get('peca', '-')}")
+                            st.write(f"**💻 Modelo:** {pedido_encontrado.get('modelo', '-')}")
+                        with col2:
+                            st.write(f"**🔢 Nº Série:** {pedido_encontrado.get('numero_serie', '-')}")
+                            st.write(f"**📄 OS:** {pedido_encontrado.get('ordem_servico', '-')}")
+                            st.write(f"**🆔 ID:** `{pedido_id_real}`")
+                        
+                        st.write(f"**Status atual:** {formatar_status(pedido_encontrado.get('status'))} → **Novo status:** {novo_status_formatado}")
+                        
+                        # Botão de confirmação final
+                        if st.button("✅ Confirmar Atualização", type="primary"):
+                            if atualizar_status(pedido_id_real, novo_status):
+                                time.sleep(2)
+                                st.rerun()
 
     # 🔥 SIDEBAR
     mostrar_sidebar_pedidos()
