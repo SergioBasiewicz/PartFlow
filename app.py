@@ -1,4 +1,4 @@
-# app.py - VERSÃO COM ID DE 8 CARACTERES
+# app.py - VERSÃO COM NOTIFICAÇÃO POR EMAIL
 import streamlit as st
 import time
 import uuid
@@ -8,11 +8,14 @@ from PIL import Image
 import io
 import os
 import json
+import smtplib
+from email.mime.text import MimeText
+from email.mime.multipart import MimeMultipart
 
 # =============================================================================
 # CONFIGURAÇÕES GERAIS
 # =============================================================================
-SENHA_AUTORIZACAO = "Printer@2025"
+SENHA_AUTORIZACAO = "admin123"
 
 STATUS_PEDIDO = ["Pendente", "Solicitado", "Entregue"]
 STATUS_EMOJIS = {
@@ -20,6 +23,113 @@ STATUS_EMOJIS = {
     "Solicitado": "🟡", 
     "Entregue": "🟢",
 }
+
+# =============================================================================
+# CONFIGURAÇÃO DE EMAIL
+# =============================================================================
+def enviar_email_notificacao(pedido_data):
+    """Envia email de notificação quando um novo pedido é criado"""
+    try:
+        # Configurações do email (adicionar no secrets.toml)
+        smtp_server = st.secrets["EMAIL"]["SMTP_SERVER"]
+        smtp_port = st.secrets["EMAIL"]["SMTP_PORT"]
+        email_from = st.secrets["EMAIL"]["EMAIL_FROM"]
+        email_password = st.secrets["EMAIL"]["EMAIL_PASSWORD"]
+        email_to = st.secrets["EMAIL"]["EMAIL_TO"]
+        
+        # Criar mensagem
+        subject = f"📦 NOVO PEDIDO CRIADO - ID: {pedido_data['id']}"
+        
+        # Corpo do email em HTML
+        body = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
+            <div style="max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                <h2 style="color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;">📦 Novo Pedido Criado</h2>
+                
+                <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                    <h3 style="color: #4CAF50; margin-top: 0;">Informações do Pedido:</h3>
+                    
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">🆔 ID do Pedido:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;"><code>{pedido_data['id']}</code></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">👤 Técnico:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data['tecnico']}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">🔧 Peça:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data['peca']}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">💻 Modelo:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data.get('modelo', 'Não informado')}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">🔢 Nº Série:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data.get('numero_serie', 'Não informado')}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">📄 OS:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data.get('ordem_servico', 'Não informada')}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">📌 Status:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                <span style="color: #ff6b6b; font-weight: bold;">🔴 {pedido_data.get('status', 'Pendente')}</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">📅 Data:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{pedido_data.get('data_criacao', 'Não informada')}</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                {f"""
+                <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #ffc107;">
+                    <h4 style="color: #856404; margin-top: 0;">📝 Observações:</h4>
+                    <p style="color: #856404; margin: 0;">{pedido_data.get('observacoes', 'Nenhuma observação')}</p>
+                </div>
+                """ if pedido_data.get('observacoes') else ""}
+                
+                <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 15px 0; text-align: center;">
+                    <p style="margin: 0; color: #0066cc;">
+                        <strong>Acesse o sistema para mais detalhes:</strong><br>
+                        <a href="#" style="color: #004499;">Sistema de Controle de Pedidos</a>
+                    </p>
+                </div>
+                
+                <footer style="text-align: center; margin-top: 20px; padding-top: 10px; border-top: 1px solid #ddd; color: #666;">
+                    <p>Este é um email automático do Sistema de Controle de Pedidos.</p>
+                </footer>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Criar mensagem
+        msg = MimeMultipart()
+        msg['From'] = email_from
+        msg['To'] = email_to
+        msg['Subject'] = subject
+        
+        # Adicionar corpo HTML
+        msg.attach(MimeText(body, 'html'))
+        
+        # Enviar email
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()  # Segurança
+            server.login(email_from, email_password)
+            server.send_message(msg)
+            
+        return True
+        
+    except Exception as e:
+        st.error(f"❌ Erro ao enviar email: {e}")
+        return False
 
 # =============================================================================
 # CONFIGURAÇÃO DO FIREBASE
@@ -220,6 +330,14 @@ def salvar_pedido(dados: dict, foto_bytes: bytes = None, nome_foto: str = None):
         doc_ref.set(pedido_completo)
         
         st.success(f"✅ Pedido {pedido_id} salvo com sucesso!")
+        
+        # 🔥 ENVIAR EMAIL DE NOTIFICAÇÃO
+        with st.spinner("📧 Enviando notificação por email..."):
+            if enviar_email_notificacao(pedido_completo):
+                st.success("📧 Notificação enviada com sucesso!")
+            else:
+                st.warning("⚠️ Pedido salvo, mas não foi possível enviar o email.")
+        
         return pedido_id
             
     except Exception as e:
@@ -288,7 +406,7 @@ def mostrar_sidebar_pedidos():
         tecnico = pedido.get('tecnico', '-') or '-'
         numero_serie = pedido.get('numero_serie', '-') or '-'
         
-        titulo_expander =  f" **Status:** {emoji_status} {status_label} — 👤 Técnico: {tecnico} — 🔢 Nº Série: {numero_serie}"
+        titulo_expander = f" **Status:** {emoji_status} {status_label} | 👤 Técnico: {tecnico} | 🔢 Nº Série: {numero_serie} | 🆔 ID: {pedido['id']}"
 
         with st.sidebar.expander(titulo_expander, expanded=False):
             # 🔥 CONTEÚDO DENTRO DO EXPANDER - AGORA VISÍVEL
@@ -300,12 +418,13 @@ def mostrar_sidebar_pedidos():
             st.write(f"**🔢 Nº Série:** {numero_serie}")
             st.write(f"**📄 OS:** {pedido.get('ordem_servico', '-')}")
             st.write(f"**📌 Status:** {emoji_status} {status_label}")
-            st.write(f"**📅 Data:** {pedido.get('data_criacao', '-')}")       
-            # Observações (se houver)
+            st.write(f"**📅 Data:** {pedido.get('data_criacao', '-')}")
+            
+            # Observações (se houver) - MESMO FORMATO DOS OUTROS CAMPOS
             if pedido.get("observacoes"):
                 st.write(f"**📝 Observações:** {pedido['observacoes']}")
 
-            st.write(f"**🆔 ID PARA COPIAR:** {pedido['id']}")
+            st.success(f"**🆔 ID PARA COPIAR:** `{pedido['id']}`")
             
             # Foto (se houver) - em expander separado para não ocupar muito espaço
             if pedido.get("tem_foto") and pedido.get("foto_url"):
@@ -405,8 +524,13 @@ def mostrar_lista_pedidos():
                 st.markdown(f"**Status:** {formatar_status(status_label)}")
 
             if pedido["observacoes"]:
-                st.markdown(f"**Observações:** {pedido['observacoes']}")
-                st.markdown("")
+                st.markdown("**Observações:**")
+                st.markdown(
+                    f"<div style='background: rgba(255,255,255,0.02); "
+                    f"padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);'>"
+                    f"{pedido['observacoes']}</div>",
+                    unsafe_allow_html=True,
+                )
 
             if pedido.get("tem_foto") and pedido.get("foto_url"):
                 try:
@@ -460,8 +584,9 @@ def mostrar_formulario_atualizacao_status():
         pedidos = listar_pedidos()
 
         with st.form("form_atualizacao_status"):
+            # 🔥 BUSCA FLEXÍVEL - ID OU NÚMERO DE SÉRIE
             valor_busca = st.text_input(
-                "🔎 ID ou Número de Série ou OS *", 
+                "🔎 ID (8 caracteres) OU Número de Série *", 
                 help="Digite o ID de 8 caracteres OU o número de série completo"
             )
 
@@ -471,41 +596,59 @@ def mostrar_formulario_atualizacao_status():
 
             submitted = st.form_submit_button("📥 Atualizar Status")
 
-        # 🔥 PROCESSAMENTO FORA DO FORMULÁRIO
+        # 🔥 MOVER A LÓGICA DE PROCESSAMENTO PARA FORA DO FORMULÁRIO
         if submitted:
             if not valor_busca.strip():
                 st.warning("⚠️ Por favor, informe o ID ou Número de Série.")
-                return
-
-            if not pedidos:
+                
+            elif not pedidos:
                 st.error("Nenhum pedido encontrado para atualizar.")
-                return
+                
+            else:
+                pedido_encontrado = None
+                valor_busca_clean = valor_busca.strip().lower()
+                
+                # 🔥 BUSCA FLEXÍVEL - PRIMEIRO POR ID, DEPOIS POR NÚMERO DE SÉRIE
+                for pedido in pedidos:
+                    # Busca por ID exato
+                    if pedido.get("id") and pedido["id"].lower() == valor_busca_clean:
+                        pedido_encontrado = pedido
+                        break
+                    
+                    # Busca por número de série (exato ou parcial)
+                    if (pedido.get("numero_serie") and 
+                        valor_busca_clean in pedido["numero_serie"].lower()):
+                        pedido_encontrado = pedido
+                        break
 
-            pedido_encontrado = None
-            valor_busca_clean = valor_busca.strip().lower()
-            
-            for pedido in pedidos:
-                if pedido.get("id") and pedido["id"].lower() == valor_busca_clean:
-                    pedido_encontrado = pedido
-                    break
-                if (pedido.get("numero_serie") and 
-                    valor_busca_clean in pedido["numero_serie"].lower()):
-                    pedido_encontrado = pedido
-                    break
-
-            if not pedido_encontrado:
-                st.error("❌ Nenhum pedido encontrado com os dados informados.")
-                return
-
-            pedido_id_real = pedido_encontrado.get("id")
-            if not pedido_id_real:
-                st.error("❌ Pedido encontrado, mas sem ID válido.")
-                return
-
-            # 🔥 ATUALIZAÇÃO DIRETA (como estava antes, mas fora do form)
-            if atualizar_status(pedido_id_real, novo_status):
-                time.sleep(2)
-                st.rerun()
+                if not pedido_encontrado:
+                    st.error("❌ Nenhum pedido encontrado com os dados informados.")
+                    
+                else:
+                    pedido_id_real = pedido_encontrado.get("id")
+                    if not pedido_id_real:
+                        st.error("❌ Pedido encontrado, mas sem ID válido.")
+                        
+                    else:
+                        # Mostrar confirmação ANTES de atualizar
+                        st.success(f"✅ Pedido encontrado!")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write(f"**👤 Técnico:** {pedido_encontrado.get('tecnico', '-')}")
+                            st.write(f"**🔧 Peça:** {pedido_encontrado.get('peca', '-')}")
+                            st.write(f"**💻 Modelo:** {pedido_encontrado.get('modelo', '-')}")
+                        with col2:
+                            st.write(f"**🔢 Nº Série:** {pedido_encontrado.get('numero_serie', '-')}")
+                            st.write(f"**📄 OS:** {pedido_encontrado.get('ordem_servico', '-')}")
+                            st.write(f"**🆔 ID:** `{pedido_id_real}`")
+                        
+                        st.write(f"**Status atual:** {formatar_status(pedido_encontrado.get('status'))} → **Novo status:** {novo_status_formatado}")
+                        
+                        # Botão de confirmação final
+                        if st.button("✅ Confirmar Atualização", type="primary"):
+                            if atualizar_status(pedido_id_real, novo_status):
+                                time.sleep(2)
+                                st.rerun()
 
     # 🔥 SIDEBAR
     mostrar_sidebar_pedidos()
