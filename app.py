@@ -1,4 +1,4 @@
-# app.py - CONTROLE DE PEDIDOS COMPLETO COM FIREBASE
+# app.py - VERSÃO COMPLETA COM SIDEBAR CORRIGIDA
 import streamlit as st
 import time
 import uuid
@@ -19,14 +19,6 @@ STATUS_EMOJIS = {
     "Pendente": "🔴",
     "Solicitado": "🟡", 
     "Entregue": "🟢",
-}
-
-EMAIL_CONFIG = {
-    "smtp_server": "smtp.gmail.com",
-    "smtp_port": 587,
-    "sender_email": os.environ.get("SENDER_EMAIL", "seu_email@exemplo.com"),
-    "sender_password": os.environ.get("EMAIL_PASSWORD", "SUA_SENHA"),
-    "recipient_emails": [os.environ.get("RECIPIENT_EMAIL", "seu_email@exemplo.com")],
 }
 
 # =============================================================================
@@ -56,12 +48,6 @@ def inicializar_firebase():
         firestore_client = firestore.Client(credentials=credentials, project=creds_dict['project_id'])
         storage_client = storage.Client(credentials=credentials, project=creds_dict['project_id'])
         
-        # Verificar se Storage está configurado
-        bucket = storage_client.bucket(bucket_name)
-        if not bucket.exists():
-            st.error("❌ Storage não configurado no Firebase Console")
-            st.stop()
-            
         st.success("✅ Firebase configurado com sucesso!")
         return firestore_client, storage_client, bucket_name
         
@@ -184,28 +170,6 @@ def obter_emoji_status(status):
     status_limpo = str(status).replace(":", "").strip()
     return STATUS_EMOJIS.get(status_limpo, "⚪")
 
-def parse_data_pedido(row: dict):
-    """Converte o campo de data para datetime para ordenar"""
-    from datetime import datetime as _dt
-
-    valor = row.get("data_criacao") or row.get("data") or row.get("timestamp") or ""
-
-    if not valor:
-        return _dt.min
-
-    formatos = [
-        "%d/%m/%Y %H:%M:%S",
-        "%d/%m/%Y",
-    ]
-
-    for fmt in formatos:
-        try:
-            return _dt.strptime(str(valor), fmt)
-        except Exception:
-            pass
-
-    return _dt.min
-
 # =============================================================================
 # FUNÇÕES FIREBASE
 # =============================================================================
@@ -313,6 +277,55 @@ def firebase_status():
 # =============================================================================
 # TELAS DO SISTEMA
 # =============================================================================
+def mostrar_sidebar_pedidos(titulo="📋 Todos os Pedidos"):
+    """Sidebar comum para Visualizar e Atualizar Status"""
+    st.sidebar.markdown("---")
+    st.sidebar.subheader(titulo)
+
+    pedidos_sidebar = listar_pedidos()
+
+    if not pedidos_sidebar:
+        st.sidebar.info("📭 Nenhum pedido encontrado.")
+        return
+
+    for pedido in pedidos_sidebar:
+        status_label = pedido.get("status") or "Pendente"
+        emoji_status = STATUS_EMOJIS.get(status_label, "⚪")
+        titulo_expander = (
+            f"{emoji_status} Pedido — Tecnico: {pedido['tecnico'] or '-'} "
+            f"— Nº de Série: {pedido['numero_serie'] or '-'} — Id: {pedido['id']}"
+        )
+
+        with st.sidebar.expander(titulo_expander, expanded=False):
+            st.write(f"**Data:** {pedido['data_criacao'] or '-'}")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown(f"**Técnico:** {pedido['tecnico'] or '-'}")
+                st.markdown(f"**Peça:** {pedido['peca'] or '-'}")
+                st.markdown(f"**Modelo:** {pedido['modelo'] or '-'}")
+
+            with col2:
+                st.markdown(f"**Nº Série:** {pedido['numero_serie'] or '-'}")
+                st.markdown(f"**OS:** {pedido['ordem_servico'] or '-'}")
+                st.markdown(f"**Status:** {formatar_status(status_label)}")
+
+            if pedido["observacoes"]:
+                st.markdown("**Observações:**")
+                st.markdown(
+                    f"<div style='background: rgba(255,255,255,0.02); "
+                    f"padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);'>"
+                    f"{pedido['observacoes']}</div>",
+                    unsafe_allow_html=True,
+                )
+
+            if pedido.get("tem_foto") and pedido.get("foto_url"):
+                try:
+                    st.image(pedido["foto_url"], use_container_width=True, caption="Foto do equipamento/peça")
+                except Exception:
+                    st.warning("⚠️ Não foi possível carregar a imagem deste pedido.")
+
 def mostrar_formulario_adicionar_pedido():
     st.header("📝 Adicionar Novo Pedido")
 
@@ -343,8 +356,6 @@ def mostrar_formulario_adicionar_pedido():
             foto_info = processar_upload_foto(uploaded_file, "preview")
             if foto_info:
                 st.success("📸 Foto processada com sucesso!")
-                # Mostrar pré-visualização
-                st.image(uploaded_file, use_container_width=True, caption="Pré-visualização da foto")
 
         submitted = st.form_submit_button("➕ Adicionar Pedido")
 
@@ -367,6 +378,9 @@ def mostrar_formulario_adicionar_pedido():
                 if pedido_id:
                     time.sleep(2)
                     st.rerun()
+    
+    # Sidebar para Adicionar Pedido
+    mostrar_sidebar_pedidos("📋 Pedidos Existentes")
 
 def mostrar_lista_pedidos():
     st.header("📋 Lista de Pedidos")
@@ -439,6 +453,9 @@ def mostrar_lista_pedidos():
             st.metric("🟢 Entregues", f"{entregues} ({taxa:.1f}%)")
     except Exception as e:
         st.error(f"Erro ao calcular estatísticas: {e}")
+    
+    # Sidebar para Visualizar Pedidos
+    mostrar_sidebar_pedidos()
 
 def mostrar_pagina_atualizar_status():
     st.header("🔄 Atualizar Status do Pedido")
@@ -501,30 +518,8 @@ def mostrar_formulario_atualizacao_status():
                     time.sleep(2)
                     st.rerun()
 
-    # Pré-visualização na sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📋 Pedidos Recentes")
-
-    pedidos_sidebar = listar_pedidos()
-
-    if not pedidos_sidebar:
-        st.sidebar.info("📭 Nenhum pedido encontrado.")
-        return
-
-    for p in pedidos_sidebar[:5]:  # Mostrar apenas os 5 mais recentes
-        status = p.get("status", "Pendente")
-        emoji = STATUS_EMOJIS.get(status, "⚪")
-        pid = p.get("id", "")
-        tecnico = p.get("tecnico", "-")
-        numero_serie = p.get("numero_serie", "-")
-
-        label = f"{emoji} {tecnico} - ID: {pid}"
-
-        with st.sidebar.expander(label, expanded=False):
-            st.write(f"**Peça:** {p.get('peca', '-')}")
-            st.write(f"**Modelo:** {p.get('modelo', '-')}")
-            st.write(f"**Nº Série:** {numero_serie}")
-            st.write(f"**Status:** {formatar_status(status)}")
+    # 🔥 SIDEBAR CORRIGIDA - IGUAL À PÁGINA VISUALIZAR PEDIDOS
+    mostrar_sidebar_pedidos("📋 Todos os Pedidos")
 
 # =============================================================================
 # MAIN
