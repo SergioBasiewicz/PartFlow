@@ -300,7 +300,7 @@ def mostrar_sidebar_pedidos():
             st.write(f"**🔢 Nº Série:** {numero_serie}")
             st.write(f"**📄 OS:** {pedido.get('ordem_servico', '-')}")
             st.write(f"**📌 Status:** {emoji_status} {status_label}")
-            st.(f"**📅 Data:** {pedido.get('data_criacao', '-')}")       
+            st.write(f"**📅 Data:** {pedido.get('data_criacao', '-')}")       
             # Observações (se houver)
             if pedido.get("observacoes"):
                 st.write(f"**📝 Observações:** {pedido['observacoes']}")
