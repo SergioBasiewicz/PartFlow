@@ -282,7 +282,6 @@ def mostrar_sidebar_pedidos():
     """Sidebar APENAS para Atualizar Status - CONTEÚDO VISÍVEL"""
     st.sidebar.markdown("---")
     st.sidebar.subheader("📋 Lista de Pedidos")
-    st.sidebar.info("💡 **Copie o ID (8 caracteres) para atualizar**")
 
     pedidos_sidebar = listar_pedidos()
 
@@ -298,7 +297,7 @@ def mostrar_sidebar_pedidos():
         tecnico = pedido.get('tecnico', '-') or '-'
         numero_serie = pedido.get('numero_serie', '-') or '-'
         
-        titulo_expander = f"{emoji_status} ID: {pedido['id']} | 👤 {tecnico} | 🔢 {numero_serie}"
+        titulo_expander = f"  | Técnico: {tecnico} | Nº Série: {numero_serie} | ID: {pedido['id']}"
 
         with st.sidebar.expander(titulo_expander, expanded=False):
             # 🔥 CONTEÚDO DENTRO DO EXPANDER - AGORA VISÍVEL
