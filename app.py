@@ -12,7 +12,7 @@ import json
 # =============================================================================
 # CONFIGURAÇÕES GERAIS
 # =============================================================================
-SENHA_AUTORIZACAO = "admin123"
+SENHA_AUTORIZACAO = "Printer@2025"
 
 STATUS_PEDIDO = ["Pendente", "Solicitado", "Entregue"]
 STATUS_EMOJIS = {
