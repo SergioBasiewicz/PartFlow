@@ -446,7 +446,7 @@ def mostrar_formulario_adicionar_pedido():
                 pedido_id = salvar_pedido(dados, uploaded_bytes, nome_foto)
                 if pedido_id:
                     # Mostrar mensagem de sucesso e aguardar um pouco
-                    time.sleep(1.5)
+                    time.sleep(3)
                     # Forçar rerun para limpar completamente
                     st.rerun()
 
