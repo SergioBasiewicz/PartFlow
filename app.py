@@ -1,4 +1,4 @@
-# app.py - VERSÃO COM NOTIFICAÇÃO POR EMAIL (CORRIGIDA)
+# app.py - VERSÃO COM LIMPEZA APÓS ADICIONAR PEDIDO
 import streamlit as st
 import time
 import uuid
@@ -160,6 +160,19 @@ def configurar_pagina():
     .streamlit-expanderHeader {
         background-color: rgba(255,255,255,0.05) !important;
         border-radius: 8px !important;
+    }
+    
+    /* Estilo para o botão de limpar formulário */
+    .stButton button[kind="secondary"] {
+        background-color: rgba(255, 107, 107, 0.1);
+        border-color: #ff6b6b;
+        color: #ff6b6b;
+    }
+    
+    .stButton button[kind="secondary"]:hover {
+        background-color: rgba(255, 107, 107, 0.2);
+        border-color: #ff6b6b;
+        color: #ff6b6b;
     }
     </style>
     """
@@ -397,18 +410,58 @@ def mostrar_sidebar_pedidos():
 def mostrar_formulario_adicionar_pedido():
     st.header("📝 Adicionar Novo Pedido")
 
-    with st.form("form_adicionar_pedido"):
+    # Inicializar estado do formulário
+    if 'form_limpo' not in st.session_state:
+        st.session_state.form_limpo = False
+    
+    # Função para limpar o formulário
+    def limpar_formulario():
+        st.session_state.form_limpo = True
+        # Limpar o cache do formulário
+        st.rerun()
+    
+    with st.form("form_adicionar_pedido", clear_on_submit=False):
         col1, col2 = st.columns(2)
 
         with col1:
-            tecnico = st.text_input("👤 Técnico *", help="Nome do técnico responsável")
-            peca = st.text_input("🔧 Peça *", help="Descrição da peça necessária")
-            modelo_equipamento = st.text_input("💻 Modelo do Equipamento", help="Modelo do equipamento")
+            tecnico = st.text_input(
+                "👤 Técnico *", 
+                help="Nome do técnico responsável",
+                value="" if st.session_state.form_limpo else "",
+                key="tecnico_input"
+            )
+            peca = st.text_input(
+                "🔧 Peça *", 
+                help="Descrição da peça necessária",
+                value="" if st.session_state.form_limpo else "",
+                key="peca_input"
+            )
+            modelo_equipamento = st.text_input(
+                "💻 Modelo do Equipamento", 
+                help="Modelo do equipamento",
+                value="" if st.session_state.form_limpo else "",
+                key="modelo_input"
+            )
 
         with col2:
-            numero_serie = st.text_input("🔢 Número de Série", help="Número de série do equipamento")
-            ordem_servico = st.text_input("📄 OS", help="Número da ordem de serviço")
-            observacoes = st.text_area("📝 Observações", help="Observações adicionais")
+            numero_serie = st.text_input(
+                "🔢 Número de Série", 
+                help="Número de série do equipamento",
+                value="" if st.session_state.form_limpo else "",
+                key="numero_serie_input"
+            )
+            ordem_servico = st.text_input(
+                "📄 OS", 
+                help="Número da ordem de serviço",
+                value="" if st.session_state.form_limpo else "",
+                key="os_input"
+            )
+            observacoes = st.text_area(
+                "📝 Observações", 
+                help="Observações adicionais",
+                value="" if st.session_state.form_limpo else "",
+                key="observacoes_input"
+            )
 
         st.markdown("---")
         st.subheader("📸 Anexar Foto (Opcional)")
@@ -417,6 +470,7 @@ def mostrar_formulario_adicionar_pedido():
             "Selecione uma foto do equipamento/peça",
             type=["jpg", "jpeg", "png", "gif"],
             help="Formatos suportadas: JPG, JPEG, PNG, GIF (máx. 5MB)",
+            key="file_uploader"
         )
 
         foto_info = None
@@ -425,7 +479,14 @@ def mostrar_formulario_adicionar_pedido():
             if foto_info:
                 st.success("📸 Foto processada com sucesso!")
 
-        submitted = st.form_submit_button("➕ Adicionar Pedido")
+        col_botoes1, col_botoes2 = st.columns(2)
+        
+        with col_botoes1:
+            submitted = st.form_submit_button("➕ Adicionar Pedido", type="primary")
+        
+        with col_botoes2:
+            if st.form_submit_button("🧹 Limpar Formulário", type="secondary"):
+                limpar_formulario()
 
         if submitted:
             if validar_formulario(tecnico, peca):
@@ -444,8 +505,11 @@ def mostrar_formulario_adicionar_pedido():
                 
                 pedido_id = salvar_pedido(dados, uploaded_bytes, nome_foto)
                 if pedido_id:
+                    # Limpar formulário após sucesso
+                    limpar_formulario()
+                    # Mostrar mensagem de sucesso
+                    st.success("✅ Pedido adicionado! Formulário limpo para novo cadastro.")
                     time.sleep(2)
-                    st.rerun()
 
 def mostrar_lista_pedidos():
     st.header("📋 Lista de Pedidos")
@@ -619,6 +683,8 @@ def mostrar_formulario_atualizacao_status():
 def inicializar_session_state():
     if "autorizado" not in st.session_state:
         st.session_state.autorizado = False
+    if "form_limpo" not in st.session_state:
+        st.session_state.form_limpo = False
 
 def main():
     configurar_pagina()
